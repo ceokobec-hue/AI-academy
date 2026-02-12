@@ -727,6 +727,10 @@ a {
   color: rgba(255, 255, 255, 0.68);
 }
 
+.hint-spacer {
+  visibility: hidden;
+}
+
 .input,
 .select,
 .textarea {

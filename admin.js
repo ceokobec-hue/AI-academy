@@ -27,7 +27,7 @@ import { DEFAULT_CATEGORIES } from "./courses-data.js";
 
 // A안: 관리자 이메일 allowlist
 // TODO: 여기에 관리자 이메일을 추가하세요. 예: ["you@example.com"]
-const ADMIN_EMAILS = [];
+const ADMIN_EMAILS = ["mentor0329@hanmail.net"];
 
 const CONFIG_PLACEHOLDER = "YOUR_";
 
@@ -61,7 +61,7 @@ function setStatus(el, text, tone = "info") {
 
 function isAdminEmail(email) {
   const e = (email || "").toLowerCase();
-  if (ADMIN_EMAILS.length === 0) return true; // 초기 부트스트랩 (개발 편의)
+  if (ADMIN_EMAILS.length === 0) return false;
   return ADMIN_EMAILS.map((x) => String(x).toLowerCase()).includes(e);
 }
 

@@ -18,6 +18,7 @@ import { firebaseConfig } from "./firebase-config.js";
 import { COURSES, DEFAULT_CATEGORIES, formatKrw } from "./courses-data.js";
 
 const CONFIG_PLACEHOLDER = "YOUR_";
+const ADMIN_EMAIL = "mentor0329@hanmail.net";
 
 function isConfigReady(cfg) {
   if (!cfg) return false;
@@ -221,7 +222,7 @@ function wireCategoryNav() {
   });
 }
 
-function renderCatalog({ categories, enrollmentMap, courses }) {
+function renderCatalog({ categories, enrollmentMap, courses, isAdmin }) {
   const featuredNew = pickFeatured(courses, "isNew");
   const featuredPopular = pickFeatured(courses, "isPopular", featuredNew?.id || "");
 
@@ -229,12 +230,15 @@ function renderCatalog({ categories, enrollmentMap, courses }) {
   const categoriesEl = $("categories");
 
   if (featuredEl) {
+    const adminLink = isAdmin
+      ? `<span class="muted">관리자 업로드:</span> <a class="link" href="./admin.html">admin.html</a>`
+      : "";
     featuredEl.innerHTML = `
       <div class="page-head">
         <h1 class="page-title">강의 카탈로그</h1>
         <p class="page-sub">
           신규/인기 강의와 카테고리별 강의를 확인하세요.
-          <span class="muted">관리자 업로드: </span><a class="link" href="./admin.html">admin.html</a>
+          ${adminLink}
         </p>
       </div>
       <div id="categoryNav">
@@ -298,19 +302,29 @@ function boot() {
 
   const fb = ensureFirebase();
   if (!fb) {
-    renderCatalog({ categories: DEFAULT_CATEGORIES, enrollmentMap: {}, courses: normalizeCourses(null) });
+    renderCatalog({
+      categories: DEFAULT_CATEGORIES,
+      enrollmentMap: {},
+      courses: normalizeCourses(null),
+      isAdmin: false,
+    });
     return;
   }
   const { auth, db } = fb;
 
   // Render once with fallback categories first
-  renderCatalog({ categories: DEFAULT_CATEGORIES, enrollmentMap: {}, courses: normalizeCourses(null) });
+  renderCatalog({
+    categories: DEFAULT_CATEGORIES,
+    enrollmentMap: {},
+    courses: normalizeCourses(null),
+    isAdmin: false,
+  });
 
   onAuthStateChanged(auth, async (user) => {
     const categories = (await fetchCategories(db)) || DEFAULT_CATEGORIES;
     const courses = normalizeCourses(await fetchCourses(db));
     if (!user) {
-      renderCatalog({ categories, enrollmentMap: {}, courses });
+      renderCatalog({ categories, enrollmentMap: {}, courses, isAdmin: false });
       return;
     }
 
@@ -321,7 +335,9 @@ function boot() {
       console.warn("Failed to fetch enrollments.", e);
       enrollmentMap = {};
     }
-    renderCatalog({ categories, enrollmentMap, courses });
+    const isAdmin =
+      typeof user.email === "string" && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    renderCatalog({ categories, enrollmentMap, courses, isAdmin });
   });
 }
 
