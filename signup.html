@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>회원가입 | 김지백 AI경영아카데미</title>
+    <meta name="description" content="김지백 AI경영아카데미 회원가입" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./script.js"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="./index.html">
+          <span class="brand-avatar" aria-hidden="true">
+            <span class="brand-avatar-inner"></span>
+          </span>
+          <span class="brand-text">
+            <span class="brand-title">김지백</span>
+            <span class="brand-sub">AI경영아카데미</span>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="주요 메뉴">
+          <a class="nav-link" href="#courses" data-toast="강의수강은 준비 중입니다.">강의수강</a>
+          <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
+          <a class="nav-link" href="#community" data-toast="커뮤니티는 준비 중입니다.">커뮤니티</a>
+          <a class="nav-link" href="./login.html">로그인</a>
+          <a class="nav-link is-active" href="./signup.html" aria-current="page">회원가입</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="auth-section">
+        <div class="container">
+          <div class="card auth-card auth-card-wide">
+            <div class="card-head">
+              <h1 class="card-title">회원가입</h1>
+              <p class="card-sub">
+                계정 생성 후, 설문을 통해 맞춤형 강의 구성을 도와드릴게요.
+              </p>
+            </div>
+
+            <div class="inline-warning" data-firebase-warning></div>
+
+            <form id="signupForm" class="form" novalidate>
+              <fieldset class="fieldset">
+                <legend class="legend">1) 기본 정보</legend>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="name">이름</label>
+                    <input class="input" id="name" name="name" autocomplete="name" required />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="nickname">별명</label>
+                    <input
+                      class="input"
+                      id="nickname"
+                      name="nickname"
+                      autocomplete="nickname"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="label" for="email">이메일</label>
+                  <input class="input" id="email" name="email" type="email" autocomplete="email" required />
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="password">비밀번호</label>
+                    <input
+                      class="input"
+                      id="password"
+                      name="password"
+                      type="password"
+                      autocomplete="new-password"
+                      required
+                    />
+                    <p class="hint">8자 이상, 대문자 1자 이상 포함</p>
+                  </div>
+                  <div class="field">
+                    <label class="label" for="passwordConfirm">비밀번호 확인</label>
+                    <input
+                      class="input"
+                      id="passwordConfirm"
+                      name="passwordConfirm"
+                      type="password"
+                      autocomplete="new-password"
+                      required
+                    />
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="fieldset">
+                <legend class="legend">2) 기본 상황 설문</legend>
+                <p class="hint">
+                  교육생의 현재 상황을 파악해 더 나은 강의를 만들기 위한 질문입니다.
+                </p>
+
+                <div class="subsection">
+                  <h3 class="subsection-title">직무/조직 정보</h3>
+                  <p class="subsection-desc">현재 일하는 환경을 알려주시면 사례를 더 정확히 맞출 수 있어요.</p>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="industry">직업(업종)</label>
+                    <select class="select" id="industry" name="industry" required>
+                      <option value="">선택</option>
+                      <option>IT/소프트웨어</option>
+                      <option>제조</option>
+                      <option>유통/리테일</option>
+                      <option>교육</option>
+                      <option>금융</option>
+                      <option>의료/헬스케어</option>
+                      <option>공공/행정</option>
+                      <option>프리랜서/자영업</option>
+                      <option>기타</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label class="label" for="role">직무</label>
+                    <input
+                      class="input"
+                      id="role"
+                      name="role"
+                      placeholder="예: 마케팅, 제품기획, 영업, 운영, 데이터분석"
+                    />
+                  </div>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="companySize">조직 규모</label>
+                    <select class="select" id="companySize" name="companySize">
+                      <option value="">선택</option>
+                      <option>1~10명</option>
+                      <option>11~50명</option>
+                      <option>51~200명</option>
+                      <option>201~1000명</option>
+                      <option>1000명 이상</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label class="label" for="weeklyTime">주당 학습 가능 시간</label>
+                    <select class="select" id="weeklyTime" name="weeklyTime">
+                      <option value="">선택</option>
+                      <option>1~2시간</option>
+                      <option>3~5시간</option>
+                      <option>6~10시간</option>
+                      <option>10시간 이상</option>
+                    </select>
+                  </div>
+                </div>
+
+                <hr class="subsection-divider" />
+                <div class="subsection">
+                  <h3 class="subsection-title">학습 여건</h3>
+                  <p class="subsection-desc">학습 시간을 고려해 부담 없는 커리큘럼으로 안내해드릴게요.</p>
+                </div>
+
+                <div class="field">
+                  <span class="label">현재 AI 활용 수준</span>
+                  <div class="chips">
+                    <label class="chip">
+                      <input type="radio" name="aiLevel" value="처음이에요" />
+                      <span>처음이에요</span>
+                    </label>
+                    <label class="chip">
+                      <input type="radio" name="aiLevel" value="가끔 써봤어요" />
+                      <span>가끔 써봤어요</span>
+                    </label>
+                    <label class="chip">
+                      <input type="radio" name="aiLevel" value="업무에 일부 사용" />
+                      <span>업무에 일부 사용</span>
+                    </label>
+                    <label class="chip">
+                      <input type="radio" name="aiLevel" value="업무에 적극 사용" />
+                      <span>업무에 적극 사용</span>
+                    </label>
+                  </div>
+                </div>
+
+                <hr class="subsection-divider" />
+                <div class="subsection">
+                  <h3 class="subsection-title">목표 역량</h3>
+                  <p class="subsection-desc">원하는 결과에 맞춰 실습/예제를 구성합니다.</p>
+                </div>
+
+                <div class="field">
+                  <span class="label">키우고 싶은 AI 역량 (복수 선택)</span>
+                  <div class="checks">
+                    <label class="check">
+                      <input type="checkbox" name="aiGoals" value="프롬프트/업무 활용" />
+                      <span>프롬프트/업무 활용</span>
+                    </label>
+                    <label class="check">
+                      <input type="checkbox" name="aiGoals" value="문서/보고서 자동화" />
+                      <span>문서/보고서 자동화</span>
+                    </label>
+                    <label class="check">
+                      <input type="checkbox" name="aiGoals" value="데이터분석/리서치" />
+                      <span>데이터분석/리서치</span>
+                    </label>
+                    <label class="check">
+                      <input type="checkbox" name="aiGoals" value="업무 프로세스 자동화" />
+                      <span>업무 프로세스 자동화</span>
+                    </label>
+                    <label class="check">
+                      <input type="checkbox" name="aiGoals" value="AI 서비스 기획" />
+                      <span>AI 서비스 기획</span>
+                    </label>
+                    <label class="check">
+                      <input type="checkbox" name="aiGoals" value="모델/기술 이해(기초)" />
+                      <span>모델/기술 이해(기초)</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <span class="label">학습 우선순위(단일 선택)</span>
+                    <div class="checks">
+                      <label class="check">
+                        <input type="radio" name="priority" value="실무 적용 우선" />
+                        <span>실무 적용 우선</span>
+                      </label>
+                      <label class="check">
+                        <input type="radio" name="priority" value="기초 이론 우선" />
+                        <span>기초 이론 우선</span>
+                      </label>
+                      <label class="check">
+                        <input type="radio" name="priority" value="도구 중심(실습) 우선" />
+                        <span>도구 중심(실습) 우선</span>
+                      </label>
+                      <label class="check">
+                        <input type="radio" name="priority" value="커리어 전환/성장 우선" />
+                        <span>커리어 전환/성장 우선</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <span class="label">현재 가장 큰 어려움(복수 선택)</span>
+                    <div class="checks">
+                      <label class="check">
+                        <input type="checkbox" name="painPoints" value="무엇부터 해야할지 모르겠음" />
+                        <span>무엇부터 해야할지 모르겠음</span>
+                      </label>
+                      <label class="check">
+                        <input type="checkbox" name="painPoints" value="업무 적용 아이디어가 없음" />
+                        <span>업무 적용 아이디어가 없음</span>
+                      </label>
+                      <label class="check">
+                        <input type="checkbox" name="painPoints" value="도구/서비스가 너무 많음" />
+                        <span>도구/서비스가 너무 많음</span>
+                      </label>
+                      <label class="check">
+                        <input type="checkbox" name="painPoints" value="시간이 부족함" />
+                        <span>시간이 부족함</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <hr class="subsection-divider" />
+                <div class="subsection">
+                  <h3 class="subsection-title">어려움 & 추가 의견</h3>
+                  <p class="subsection-desc">가장 막히는 부분을 알려주시면 강의 개선에 반영하겠습니다.</p>
+                </div>
+
+                <div class="field">
+                  <label class="label" for="note">추가로 알려주고 싶은 내용(선택)</label>
+                  <textarea
+                    class="textarea"
+                    id="note"
+                    name="note"
+                    rows="4"
+                    placeholder="예: 우리 팀 업무에 맞춘 사례가 있었으면 좋겠어요."
+                  ></textarea>
+                </div>
+              </fieldset>
+
+              <fieldset class="fieldset">
+                <legend class="legend">3) 약관 및 동의</legend>
+
+                <div class="checks">
+                  <label class="check">
+                    <input type="checkbox" name="agreeTerms" required />
+                    <span>
+                      (필수) <a class="link" href="#" data-toast="이용약관 페이지는 준비 중입니다.">이용약관</a>에 동의합니다.
+                    </span>
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" name="agreePrivacy" required />
+                    <span>
+                      (필수)
+                      <a class="link" href="#" data-toast="개인정보 처리방침 페이지는 준비 중입니다.">개인정보 처리방침</a>에 동의합니다.
+                    </span>
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" name="agreeMarketing" />
+                    <span>(선택) 교육/이벤트 안내 수신에 동의합니다.</span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <div class="actions">
+                <button class="btn btn-primary" type="submit">회원가입</button>
+                <a class="btn btn-ghost" href="./login.html">로그인으로</a>
+              </div>
+
+              <p id="signupMsg" class="form-msg" role="status" aria-live="polite"></p>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
+    <script type="module" src="./auth.js"></script>
+  </body>
+</html>
+

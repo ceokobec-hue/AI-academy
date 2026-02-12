@@ -8,7 +8,6 @@ git status
 git add .
 
 # 3️⃣ 로컬에 저장 (버전 기록 남기기)
-git commit -m "작업 내용 간단히 설명"
 
 # 4️⃣ GitHub에 업로드 (원격 백업)
 git push
