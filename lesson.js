@@ -221,9 +221,52 @@ function renderNotFound() {
   if (header) header.innerHTML = `<p style="margin:0;font-weight:900;">강의를 찾을 수 없습니다.</p>`;
 }
 
-function boot() {
+async function fetchCourseFromFirestore(db, id) {
+  try {
+    const snap = await getDoc(doc(db, "courses", id));
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...snap.data() };
+  } catch (e) {
+    console.warn("Failed to fetch course from Firestore, falling back.", e);
+    return null;
+  }
+}
+
+function normalizeCourse(c, idFallback) {
+  if (!c) return null;
+  return {
+    id: String(c.id || idFallback || ""),
+    title: String(c.title || ""),
+    shortDescription: String(c.shortDescription || ""),
+    priceKrw: Number(c.priceKrw || 0),
+    durationDays: Number(c.durationDays || 0),
+    startDate: String(c.startDate || ""),
+    thumbnailUrl: String(c.thumbnailUrl || ""),
+    categoryId: String(c.categoryId || ""),
+    isNew: !!c.isNew,
+    isPopular: !!c.isPopular,
+    published: c.published !== false,
+    video: c.video || { src: "", poster: "" },
+    content: c.content || { overview: "", bullets: [] },
+    resources: Array.isArray(c.resources) ? c.resources : [],
+    files: Array.isArray(c.files) ? c.files : [],
+  };
+}
+
+async function boot() {
   const id = qs().get("id") || "";
-  const course = getCourseById(id);
+  const fb = ensureFirebase();
+  let course = null;
+
+  if (fb) {
+    const fromDb = await fetchCourseFromFirestore(fb.db, id);
+    course = normalizeCourse(fromDb, id);
+  }
+
+  if (!course) {
+    course = normalizeCourse(getCourseById(id), id);
+  }
+
   if (!course) {
     renderNotFound();
     return;
@@ -239,7 +282,6 @@ function boot() {
   renderCTA({ course, user: null, enrolled: false, onEnroll: () => {} });
   renderVideo({ course, user: null, enrolled: false });
 
-  const fb = ensureFirebase();
   if (!fb) return;
   const { auth, db } = fb;
 

@@ -49,8 +49,8 @@ function esc(s) {
     .replaceAll("'", "&#039;");
 }
 
-function pickFeatured(flagKey) {
-  const list = COURSES.filter((c) => !!c[flagKey]);
+function pickFeatured(courses, flagKey, excludeId = "") {
+  const list = courses.filter((c) => !!c?.[flagKey] && c.id !== excludeId);
   if (!list.length) return null;
   return list
     .slice()
@@ -101,9 +101,9 @@ function featuredCard(course, label, { enrolled }) {
   `;
 }
 
-async function getEnrollmentMap({ uid, db }) {
+async function getEnrollmentMap({ uid, db, courses }) {
   const pairs = await Promise.all(
-    COURSES.map(async (c) => {
+    courses.map(async (c) => {
       const ref = doc(db, "users", uid, "enrollments", c.id);
       const snap = await getDoc(ref);
       return [c.id, snap.exists()];
@@ -139,6 +139,38 @@ function groupCoursesByCategory(categories) {
     map.get(id).push(course);
   }
   return map;
+}
+
+async function fetchCourses(db) {
+  try {
+    const snap = await getDocs(collection(db, "courses"));
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const published = list.filter((c) => c && c.published !== false && typeof c.title === "string");
+    return published;
+  } catch (e) {
+    console.warn("Failed to fetch courses from Firestore, falling back.", e);
+    return null;
+  }
+}
+
+function normalizeCourses(list) {
+  const raw = Array.isArray(list) && list.length ? list : COURSES;
+  return raw.map((c) => ({
+    id: String(c.id),
+    categoryId: String(c.categoryId || ""),
+    isNew: !!c.isNew,
+    isPopular: !!c.isPopular,
+    title: String(c.title || ""),
+    shortDescription: String(c.shortDescription || ""),
+    priceKrw: Number(c.priceKrw || 0),
+    durationDays: Number(c.durationDays || 0),
+    startDate: String(c.startDate || ""),
+    thumbnailUrl: String(c.thumbnailUrl || ""),
+    video: c.video || { src: "", poster: "" },
+    content: c.content || { overview: "", bullets: [] },
+    resources: Array.isArray(c.resources) ? c.resources : [],
+    files: Array.isArray(c.files) ? c.files : [],
+  }));
 }
 
 function renderCategoryNav(categories) {
@@ -189,9 +221,9 @@ function wireCategoryNav() {
   });
 }
 
-function renderCatalog({ categories, enrollmentMap }) {
-  const featuredNew = pickFeatured("isNew");
-  const featuredPopular = pickFeatured("isPopular");
+function renderCatalog({ categories, enrollmentMap, courses }) {
+  const featuredNew = pickFeatured(courses, "isNew");
+  const featuredPopular = pickFeatured(courses, "isPopular", featuredNew?.id || "");
 
   const featuredEl = $("featured");
   const categoriesEl = $("categories");
@@ -200,7 +232,10 @@ function renderCatalog({ categories, enrollmentMap }) {
     featuredEl.innerHTML = `
       <div class="page-head">
         <h1 class="page-title">강의 카탈로그</h1>
-        <p class="page-sub">신규/인기 강의와 카테고리별 강의를 확인하세요.</p>
+        <p class="page-sub">
+          신규/인기 강의와 카테고리별 강의를 확인하세요.
+          <span class="muted">관리자 업로드: </span><a class="link" href="./admin.html">admin.html</a>
+        </p>
       </div>
       <div id="categoryNav">
         ${renderCategoryNav(categories)}
@@ -224,7 +259,12 @@ function renderCatalog({ categories, enrollmentMap }) {
   }
 
   if (categoriesEl) {
-    const grouped = groupCoursesByCategory(categories);
+    const grouped = new Map(categories.map((c) => [c.id, []]));
+    for (const course of courses) {
+      const id = course.categoryId || "";
+      if (!grouped.has(id)) continue;
+      grouped.get(id).push(course);
+    }
     categoriesEl.innerHTML = categories
       .slice()
       .sort((a, b) => (a.order || 0) - (b.order || 0))
@@ -258,29 +298,30 @@ function boot() {
 
   const fb = ensureFirebase();
   if (!fb) {
-    renderCatalog({ categories: DEFAULT_CATEGORIES, enrollmentMap: {} });
+    renderCatalog({ categories: DEFAULT_CATEGORIES, enrollmentMap: {}, courses: normalizeCourses(null) });
     return;
   }
   const { auth, db } = fb;
 
   // Render once with fallback categories first
-  renderCatalog({ categories: DEFAULT_CATEGORIES, enrollmentMap: {} });
+  renderCatalog({ categories: DEFAULT_CATEGORIES, enrollmentMap: {}, courses: normalizeCourses(null) });
 
   onAuthStateChanged(auth, async (user) => {
     const categories = (await fetchCategories(db)) || DEFAULT_CATEGORIES;
+    const courses = normalizeCourses(await fetchCourses(db));
     if (!user) {
-      renderCatalog({ categories, enrollmentMap: {} });
+      renderCatalog({ categories, enrollmentMap: {}, courses });
       return;
     }
 
     let enrollmentMap = {};
     try {
-      enrollmentMap = await getEnrollmentMap({ uid: user.uid, db });
+      enrollmentMap = await getEnrollmentMap({ uid: user.uid, db, courses });
     } catch (e) {
       console.warn("Failed to fetch enrollments.", e);
       enrollmentMap = {};
     }
-    renderCatalog({ categories, enrollmentMap });
+    renderCatalog({ categories, enrollmentMap, courses });
   });
 }
 

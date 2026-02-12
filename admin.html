@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>관리자 | 강의 업로드</title>
+    <meta name="description" content="강의 등록/수정 및 파일 업로드" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./script.js"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="./index.html">
+          <span class="brand-avatar" aria-hidden="true">
+            <span class="brand-avatar-inner"></span>
+          </span>
+          <span class="brand-text">
+            <span class="brand-title">김지백</span>
+            <span class="brand-sub">AI경영아카데미</span>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="주요 메뉴">
+          <a class="nav-link" href="./course.html">강의수강</a>
+          <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
+          <a class="nav-link" href="#community" data-toast="커뮤니티는 준비 중입니다.">커뮤니티</a>
+          <a class="nav-link" data-auth-link="login" href="./login.html">로그인</a>
+          <a class="nav-link" data-auth-link="signup" href="./signup.html">회원가입</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="auth-section">
+        <div class="container">
+          <div class="card auth-card auth-card-wide">
+            <div class="card-head">
+              <h1 class="card-title">관리자: 강의 업로드</h1>
+              <p class="card-sub">강의 메타데이터 + 파일 업로드를 한 번에 처리합니다.</p>
+            </div>
+
+            <div class="inline-warning" id="adminWarn" aria-live="polite"></div>
+
+            <div class="admin-gate" id="adminGate">
+              <p class="hint" style="margin: 0">
+                이 페이지는 관리자만 사용할 수 있습니다. 먼저 로그인해 주세요.
+              </p>
+              <div class="actions">
+                <a class="btn btn-primary" href="./login.html">로그인</a>
+                <a class="btn btn-ghost" href="./course.html">카탈로그로</a>
+              </div>
+            </div>
+
+            <form id="adminForm" class="form" style="display: none" novalidate>
+              <fieldset class="fieldset">
+                <legend class="legend">기본 정보</legend>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="courseId">courseId (비우면 자동 생성)</label>
+                    <input class="input" id="courseId" name="courseId" placeholder="예: ai-basic-001" />
+                    <p class="hint">수정 시에는 기존 courseId를 입력하거나 URL에 `?id=...`로 접속하세요.</p>
+                  </div>
+                  <div class="field">
+                    <label class="label" for="categoryId">카테고리</label>
+                    <select class="select" id="categoryId" name="categoryId" required></select>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="label" for="title">강의 제목</label>
+                  <input class="input" id="title" name="title" required />
+                </div>
+
+                <div class="field">
+                  <label class="label" for="shortDescription">간단 설명(목록용)</label>
+                  <textarea class="textarea" id="shortDescription" name="shortDescription" rows="3" required></textarea>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="priceKrw">가격(원)</label>
+                    <input class="input" id="priceKrw" name="priceKrw" type="number" min="0" step="100" required />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="durationDays">수강기간(일)</label>
+                    <input class="input" id="durationDays" name="durationDays" type="number" min="1" step="1" required />
+                  </div>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="startDate">개강일</label>
+                    <input class="input" id="startDate" name="startDate" type="date" required />
+                  </div>
+                  <div class="field">
+                    <span class="label">표시 옵션</span>
+                    <div class="checks">
+                      <label class="check"><input type="checkbox" name="isNew" /> <span>신규 강의</span></label>
+                      <label class="check"><input type="checkbox" name="isPopular" /> <span>인기 강의</span></label>
+                      <label class="check"><input type="checkbox" name="published" checked /> <span>공개</span></label>
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="fieldset">
+                <legend class="legend">상세 내용</legend>
+
+                <div class="field">
+                  <label class="label" for="overview">소개(본문)</label>
+                  <textarea class="textarea" id="overview" name="overview" rows="4"></textarea>
+                </div>
+
+                <div class="field">
+                  <label class="label" for="bullets">핵심 포인트(한 줄에 1개)</label>
+                  <textarea class="textarea" id="bullets" name="bullets" rows="4" placeholder="예: 업무용 프롬프트 구조"></textarea>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="resourceTitle">코드/자료 제목(선택)</label>
+                    <input class="input" id="resourceTitle" name="resourceTitle" />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="resourceDesc">코드/자료 설명(선택)</label>
+                    <input class="input" id="resourceDesc" name="resourceDesc" />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="label" for="resourceCode">코드(선택)</label>
+                  <textarea class="textarea" id="resourceCode" name="resourceCode" rows="6"></textarea>
+                </div>
+              </fieldset>
+
+              <fieldset class="fieldset">
+                <legend class="legend">파일 업로드</legend>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="thumbFile">썸네일 이미지</label>
+                    <input class="input" id="thumbFile" name="thumbFile" type="file" accept="image/*" />
+                    <progress class="upload-progress" id="thumbProgress" max="100" value="0"></progress>
+                  </div>
+                  <div class="field">
+                    <label class="label" for="videoFile">교육 영상(mp4 등)</label>
+                    <input class="input" id="videoFile" name="videoFile" type="file" accept="video/*" />
+                    <progress class="upload-progress" id="videoProgress" max="100" value="0"></progress>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="label" for="attachFiles">첨부파일(PDF/ZIP 등, 여러 개 가능)</label>
+                  <input class="input" id="attachFiles" name="attachFiles" type="file" multiple />
+                  <div id="attachProgressList" class="attach-list"></div>
+                </div>
+              </fieldset>
+
+              <div class="actions">
+                <button class="btn btn-primary" type="submit">저장</button>
+                <a class="btn btn-ghost" href="./course.html">카탈로그로</a>
+              </div>
+
+              <p id="adminMsg" class="form-msg" role="status" aria-live="polite"></p>
+              <div id="adminResult" style="margin-top: 10px"></div>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
+    <script type="module" src="./header-auth.js"></script>
+    <script type="module" src="./admin.js"></script>
+  </body>
+</html>
+
