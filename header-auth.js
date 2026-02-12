@@ -17,6 +17,7 @@ import {
 import { firebaseConfig } from "./firebase-config.js";
 
 const CONFIG_PLACEHOLDER = "YOUR_";
+const ADMIN_EMAIL = "mentor0329@hanmail.net";
 
 function isConfigReady(cfg) {
   if (!cfg) return false;
@@ -57,6 +58,31 @@ function ensureAuthUIContainer({ signupLink, loginLink }) {
     document.querySelector("nav.nav")?.appendChild(container);
   }
   return container;
+}
+
+function isAdmin(user) {
+  return typeof user?.email === "string" && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+}
+
+function upsertAdminLink(user) {
+  const nav = document.querySelector("nav.nav");
+  if (!nav) return;
+
+  const existing = nav.querySelector('[data-admin-link="true"]');
+  if (user && isAdmin(user)) {
+    if (existing) return;
+    const a = document.createElement("a");
+    a.className = "nav-link";
+    a.href = "./admin.html";
+    a.textContent = "관리자";
+    a.dataset.adminLink = "true";
+
+    const loginLink = nav.querySelector('[data-auth-link="login"]');
+    nav.insertBefore(a, loginLink || null);
+    return;
+  }
+
+  existing?.remove();
 }
 
 function renderLoggedOut({ loginLink, signupLink, authUI }) {
@@ -115,10 +141,12 @@ function wireHeaderAuth() {
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
+      upsertAdminLink(null);
       renderLoggedOut({ loginLink, signupLink, authUI });
       return;
     }
 
+    upsertAdminLink(user);
     const displayName = await getDisplayName({ user, db });
     renderLoggedIn({
       loginLink,

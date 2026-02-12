@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>관리자(일정 등록) | 김지백 AI경영아카데미</title>
+    <meta name="description" content="메인 일정표(반복/단발) 등록 관리자 페이지" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./script.js"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="./index.html">
+          <span class="brand-avatar" aria-hidden="true">
+            <span class="brand-avatar-inner"></span>
+          </span>
+          <span class="brand-text">
+            <span class="brand-title">김지백</span>
+            <span class="brand-sub">AI경영아카데미</span>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="주요 메뉴">
+          <a class="nav-link" href="./course.html">강의수강</a>
+          <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
+          <a class="nav-link" href="./community.html">커뮤니티</a>
+          <a class="nav-link" href="./admin.html">강의 업로드</a>
+          <a class="nav-link" data-auth-link="login" href="./login.html">로그인</a>
+          <a class="nav-link" data-auth-link="signup" href="./signup.html">회원가입</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="course-section">
+        <div class="container">
+          <div class="page-head">
+            <h1 class="page-title">관리자: 일정 등록</h1>
+            <p class="page-sub">반복 수업(규칙) + 단발 일정(특강/마감)을 등록해.</p>
+          </div>
+
+          <div class="inline-warning" id="adminWarn"></div>
+
+          <div id="adminGate" class="card" style="display: none">
+            <p style="margin: 0; line-height: 1.7">
+              이 페이지는 <b>관리자만</b> 사용할 수 있어. 먼저 로그인해줘.
+            </p>
+            <div style="margin-top: 12px">
+              <a class="btn btn-primary" href="./login.html">로그인하러 가기</a>
+              <a class="btn btn-ghost" href="./index.html">메인으로</a>
+            </div>
+          </div>
+
+          <div id="adminBody" style="display: none">
+            <div class="card form">
+              <h2 class="panel-title" style="margin: 0 0 12px">반복 수업 등록(규칙)</h2>
+              <form id="ruleForm">
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="rTitle">제목</label>
+                    <input class="input" id="rTitle" required />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="rType">종류</label>
+                    <select class="select" id="rType">
+                      <option value="live">라이브</option>
+                      <option value="special">특강</option>
+                      <option value="deadline">마감</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="label">요일(복수 선택)</label>
+                  <div class="checks">
+                    <label class="check"><input type="checkbox" value="0" /> 일</label>
+                    <label class="check"><input type="checkbox" value="1" /> 월</label>
+                    <label class="check"><input type="checkbox" value="2" /> 화</label>
+                    <label class="check"><input type="checkbox" value="3" /> 수</label>
+                    <label class="check"><input type="checkbox" value="4" /> 목</label>
+                    <label class="check"><input type="checkbox" value="5" /> 금</label>
+                    <label class="check"><input type="checkbox" value="6" /> 토</label>
+                  </div>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="rTime">시작 시간</label>
+                    <input class="input" id="rTime" type="time" value="19:00" required />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="rDuration">수업 길이(분)</label>
+                    <input class="input" id="rDuration" type="number" min="10" step="5" value="90" required />
+                  </div>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="rStart">시작일</label>
+                    <input class="input" id="rStart" type="date" />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="rEnd">종료일</label>
+                    <input class="input" id="rEnd" type="date" />
+                  </div>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="rTeacher">강사(선택)</label>
+                    <input class="input" id="rTeacher" />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="rPlace">장소(선택)</label>
+                    <input class="input" id="rPlace" placeholder="Zoom" />
+                  </div>
+                </div>
+
+                <div class="actions">
+                  <button class="btn btn-primary" type="submit">규칙 저장</button>
+                  <a class="btn btn-ghost" href="./index.html">메인 확인</a>
+                </div>
+                <p id="ruleMsg" class="form-msg" role="status" aria-live="polite"></p>
+              </form>
+            </div>
+
+            <div class="card form" style="margin-top: 14px">
+              <h2 class="panel-title" style="margin: 0 0 12px">단발 일정 등록(특강/마감)</h2>
+              <form id="eventForm">
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="eTitle">제목</label>
+                    <input class="input" id="eTitle" required />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="eType">종류</label>
+                    <select class="select" id="eType">
+                      <option value="special">특강</option>
+                      <option value="deadline">마감</option>
+                      <option value="live">라이브(단발)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="eStart">시작</label>
+                    <input class="input" id="eStart" type="datetime-local" required />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="eEnd">끝(선택)</label>
+                    <input class="input" id="eEnd" type="datetime-local" />
+                  </div>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="eTeacher">강사(선택)</label>
+                    <input class="input" id="eTeacher" />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="ePlace">장소(선택)</label>
+                    <input class="input" id="ePlace" placeholder="Zoom" />
+                  </div>
+                </div>
+
+                <div class="actions">
+                  <button class="btn btn-primary" type="submit">일정 저장</button>
+                  <a class="btn btn-ghost" href="./index.html">메인 확인</a>
+                </div>
+                <p id="eventMsg" class="form-msg" role="status" aria-live="polite"></p>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
+    <script type="module" src="./header-auth.js"></script>
+    <script type="module" src="./admin-schedule.js"></script>
+  </body>
+</html>
+

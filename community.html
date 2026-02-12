@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>커뮤니티 | 김지백 AI경영아카데미</title>
+    <meta name="description" content="오늘의 미션 인증과 질문/답변을 나누는 커뮤니티" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./script.js"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="./index.html">
+          <span class="brand-avatar" aria-hidden="true">
+            <span class="brand-avatar-inner"></span>
+          </span>
+          <span class="brand-text">
+            <span class="brand-title">김지백</span>
+            <span class="brand-sub">AI경영아카데미</span>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="주요 메뉴">
+          <a class="nav-link" href="./course.html">강의수강</a>
+          <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
+          <a class="nav-link is-active" href="./community.html" aria-current="page">커뮤니티</a>
+          <a class="nav-link" data-auth-link="login" href="./login.html">로그인</a>
+          <a class="nav-link" data-auth-link="signup" href="./signup.html">회원가입</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="community-section">
+        <div class="container">
+          <div class="page-head">
+            <h1 class="page-title">커뮤니티</h1>
+            <p class="page-sub">
+              오늘의 미션 인증과 질문/답변을 해보자.
+              <span class="muted">처음이면 미션 인증부터 시작하면 쉬워.</span>
+            </p>
+          </div>
+
+          <section class="mission-card card">
+            <div class="mission-thumb" id="missionThumb" hidden>
+              <img id="missionThumbImg" alt="" loading="lazy" decoding="async" />
+              <div class="mission-thumb-overlay" aria-hidden="true"></div>
+            </div>
+            <div class="mission-head">
+              <div>
+                <p class="mission-kicker">오늘의 미션</p>
+                <h2 class="mission-title" id="missionTitle">불러오는 중...</h2>
+              </div>
+              <div class="mission-actions" id="missionActions"></div>
+            </div>
+            <p class="mission-desc" id="missionDesc"></p>
+            <details class="mission-details">
+              <summary>예시 보기</summary>
+              <pre class="mission-example"><code id="missionExample"></code></pre>
+            </details>
+            <p class="hint" id="missionHint"></p>
+          </section>
+
+          <div class="tabs">
+            <button class="tab is-active" type="button" data-tab="mission">미션 인증</button>
+            <button class="tab" type="button" data-tab="question">질문/답변</button>
+          </div>
+
+          <section id="tab_mission" class="tab-panel is-active" aria-label="미션 인증">
+            <div class="panel-head">
+              <h2 class="panel-title">미션 인증</h2>
+              <div class="panel-actions" id="missionPanelActions"></div>
+            </div>
+            <div id="missionFeed" class="post-list" aria-live="polite"></div>
+          </section>
+
+          <section id="tab_question" class="tab-panel" aria-label="질문/답변">
+            <div class="panel-head">
+              <h2 class="panel-title">질문/답변</h2>
+              <div class="panel-actions" id="questionPanelActions"></div>
+            </div>
+            <div class="filter-row">
+              <select class="select" id="questionFilter">
+                <option value="all">전체</option>
+                <option value="open">미해결</option>
+                <option value="solved">해결됨</option>
+              </select>
+            </div>
+            <div id="questionFeed" class="post-list" aria-live="polite"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="modal" id="postModal" aria-label="글 작성">
+      <form class="modal-card modal-wide" id="postForm" method="dialog">
+        <div class="modal-head">
+          <p class="modal-title" id="postModalTitle">글 작성</p>
+          <button class="icon-btn" type="button" id="postClose" aria-label="닫기">×</button>
+        </div>
+
+        <div class="field">
+          <label class="label" for="postTitle">제목</label>
+          <input class="input" id="postTitle" name="title" required />
+        </div>
+
+        <div class="field">
+          <label class="label" for="postBody">내용</label>
+          <textarea class="textarea" id="postBody" name="body" rows="5" required></textarea>
+        </div>
+
+        <div class="field" id="postTagsWrap">
+          <label class="label" for="postTags">태그(질문용, 쉼표로)</label>
+          <input class="input" id="postTags" name="tags" placeholder="예: 프롬프트, 보고서, 노션" />
+        </div>
+
+        <div class="field" id="postPromptWrap">
+          <label class="label" for="postPrompt">내가 쓴 프롬프트(선택)</label>
+          <textarea class="textarea" id="postPrompt" name="prompt" rows="4"></textarea>
+        </div>
+
+        <div class="field" id="postImageWrap">
+          <label class="label" for="postImage">인증샷(선택)</label>
+          <input class="input" id="postImage" name="image" type="file" accept="image/*" />
+          <progress class="upload-progress" id="postImageProgress" max="100" value="0"></progress>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" type="submit">올리기</button>
+          <button class="btn btn-ghost" type="button" id="postCancel">취소</button>
+        </div>
+
+        <p id="postMsg" class="form-msg" role="status" aria-live="polite"></p>
+      </form>
+    </dialog>
+
+    <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
+    <script type="module" src="./header-auth.js"></script>
+    <script type="module" src="./community.js"></script>
+  </body>
+</html>
+

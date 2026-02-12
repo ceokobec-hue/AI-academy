@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>관리자(미션) | 김지백 AI경영아카데미</title>
+    <meta name="description" content="오늘의 미션 등록/수정 관리자 페이지" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./script.js"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="./index.html">
+          <span class="brand-avatar" aria-hidden="true">
+            <span class="brand-avatar-inner"></span>
+          </span>
+          <span class="brand-text">
+            <span class="brand-title">김지백</span>
+            <span class="brand-sub">AI경영아카데미</span>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="주요 메뉴">
+          <a class="nav-link" href="./course.html">강의수강</a>
+          <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
+          <a class="nav-link" href="./community.html">커뮤니티</a>
+          <a class="nav-link" href="./admin.html">강의 업로드</a>
+          <a class="nav-link" data-auth-link="login" href="./login.html">로그인</a>
+          <a class="nav-link" data-auth-link="signup" href="./signup.html">회원가입</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="course-section">
+        <div class="container">
+          <div class="page-head">
+            <h1 class="page-title">오늘의 미션 올리기(관리자)</h1>
+            <p class="page-sub">여기서 저장하면 커뮤니티 메인에 바로 보여.</p>
+          </div>
+
+          <div class="inline-warning" id="adminWarn"></div>
+
+          <div id="adminGate" class="card" style="display: none">
+            <p style="margin: 0; line-height: 1.7">
+              이 페이지는 <b>관리자만</b> 사용할 수 있어. 먼저 로그인해줘.
+            </p>
+            <div style="margin-top: 12px">
+              <a class="btn btn-primary" href="./login.html">로그인하러 가기</a>
+              <a class="btn btn-ghost" href="./community.html">커뮤니티로</a>
+            </div>
+          </div>
+
+          <form id="adminMissionForm" class="card form" style="display: none">
+            <div class="field">
+              <label class="label" for="mTitle">미션 제목</label>
+              <input class="input" id="mTitle" required />
+            </div>
+
+            <div class="field">
+              <label class="label" for="mThumb">미션 썸네일(큰 이미지)</label>
+              <input class="input" id="mThumb" type="file" accept="image/*" />
+              <progress class="upload-progress" id="mThumbProgress" max="100" value="0"></progress>
+              <div class="mission-thumb-preview" id="mThumbPreview" style="display: none">
+                <img id="mThumbPreviewImg" alt="" />
+              </div>
+              <p class="hint">커뮤니티 상단에 크게 보여줄 이미지야. (선택)</p>
+            </div>
+
+            <div class="field">
+              <label class="label" for="mDesc">미션 설명</label>
+              <textarea class="textarea" id="mDesc" rows="4" required></textarea>
+            </div>
+
+            <div class="field">
+              <label class="label" for="mExample">예시(코드/텍스트)</label>
+              <textarea class="textarea" id="mExample" rows="6"></textarea>
+              <p class="hint">예시는 커뮤니티에서 “예시 보기”를 눌렀을 때 보여줘.</p>
+            </div>
+
+            <div class="actions">
+              <button class="btn btn-primary" type="submit">저장</button>
+              <a class="btn btn-ghost" href="./community.html">커뮤니티로 이동</a>
+            </div>
+
+            <p id="adminMsg" class="form-msg" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
+    <script type="module" src="./header-auth.js"></script>
+    <script type="module" src="./admin-community.js"></script>
+  </body>
+</html>
+

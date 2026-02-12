@@ -111,3 +111,82 @@ service firebase.storage {
 - Authentication → Email/Password 활성화
 - Firestore Database 생성
 - Storage 활성화(파일 업로드용)
+
+### 5) 커뮤니티(미션/게시글) 컬렉션 메모
+
+- **missions/current**: 오늘의 미션(관리자가 수정)
+- **posts**: 커뮤니티 글(미션 인증/질문)
+
+#### Firestore Rules (개발용 예시)
+
+```js
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 커뮤니티는 읽기 공개
+    match /missions/{missionId} {
+      allow read: if true;
+      // TODO(운영): 관리자만 write(커스텀 클레임/백엔드 권장)
+      allow write: if request.auth != null;
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      // 로그인한 사용자만 작성/수정(개발용)
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null;
+    }
+  }
+}
+```
+
+#### Storage Rules (개발용 예시)
+
+```js
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /community/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}
+```
+
+### 6) 메인페이지(일정/로드맵/게시판) 컬렉션 메모
+
+- **scheduleRules**: 반복 수업 규칙(예: 매주 화/목 19:00)
+- **scheduleEvents**: 단발 일정(특강/마감 등)
+- **roadmapWeeks**: 1~8주 로드맵
+- **boardItems**: 공지/모집/후기(3단 보드)
+
+#### scheduleRules 예시
+
+```js
+{
+  title: "라이브 수업: 프롬프트 기초",
+  type: "live", // live | special | deadline
+  weekdays: [2,4], // 화/목
+  time: "19:00",
+  durationMinutes: 90,
+  startDate: "2026-02-01",
+  endDate: "2026-12-31",
+  teacher: "김지백",
+  place: "Zoom"
+}
+```
+
+#### boardItems(모집) 예시
+
+```js
+{
+  board: "recruit",
+  title: "모집: 실무반 2기",
+  body: "월요일 20:30 라이브",
+  capacity: 20,
+  remaining: 5,
+  deadlineAt: <Timestamp>,
+  createdAt: <Timestamp>
+}
+```

@@ -38,7 +38,7 @@
         <nav class="nav" aria-label="주요 메뉴">
           <a class="nav-link" href="./course.html">강의수강</a>
           <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
-          <a class="nav-link" href="#community" data-toast="커뮤니티는 준비 중입니다.">커뮤니티</a>
+          <a class="nav-link" href="./community.html">커뮤니티</a>
           <a class="nav-link" data-auth-link="login" href="./login.html">로그인</a>
           <a class="nav-link" data-auth-link="signup" href="./signup.html">회원가입</a>
         </nav>
@@ -70,9 +70,82 @@
           </div>
         </div>
       </section>
+
+      <section class="home-section" aria-label="이번 달 강의 일정">
+        <div class="container">
+          <div class="page-head">
+            <h2 class="page-title">이번 달 라이브 수업 일정</h2>
+            <p class="page-sub">학원처럼 “달력”으로 한눈에 보자. 반복 수업도 자동 표시돼.</p>
+          </div>
+
+          <div class="schedule-card card">
+            <div class="schedule-head">
+              <div class="schedule-month">
+                <button class="btn btn-ghost btn-sm" type="button" id="calPrev" aria-label="이전 달">←</button>
+                <div class="schedule-month-title" id="calTitle">-</div>
+                <button class="btn btn-ghost btn-sm" type="button" id="calNext" aria-label="다음 달">→</button>
+              </div>
+              <div class="schedule-legend">
+                <span class="legend-item"><span class="dot dot-live"></span> 라이브</span>
+                <span class="legend-item"><span class="dot dot-special"></span> 특강</span>
+                <span class="legend-item"><span class="dot dot-deadline"></span> 마감</span>
+              </div>
+              <div class="schedule-admin" id="scheduleAdminActions"></div>
+            </div>
+
+            <div class="calendar">
+              <div class="calendar-dow">
+                <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
+              </div>
+              <div class="calendar-grid" id="calGrid" aria-live="polite"></div>
+            </div>
+
+            <div class="upcoming">
+              <div class="upcoming-head">
+                <h3 class="panel-title" style="margin:0;">다가오는 수업</h3>
+                <a class="btn btn-ghost btn-sm" href="./course.html">강의 보러가기</a>
+              </div>
+              <div id="upcomingList" class="upcoming-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="home-section" aria-label="학원 게시판">
+        <div class="container">
+          <div class="page-head">
+            <h2 class="page-title">학원 게시판</h2>
+            <p class="page-sub">공지 / 모집 / 후기 한 번에 보기</p>
+          </div>
+
+          <div class="board-grid">
+            <section class="board card">
+              <div class="board-head">
+                <h3 class="panel-title" style="margin:0;">공지</h3>
+              </div>
+              <div class="board-list" id="boardNotice"></div>
+            </section>
+
+            <section class="board card">
+              <div class="board-head">
+                <h3 class="panel-title" style="margin:0;">모집</h3>
+              </div>
+              <div class="board-list" id="boardRecruit"></div>
+            </section>
+
+            <section class="board card">
+              <div class="board-head">
+                <h3 class="panel-title" style="margin:0;">후기</h3>
+              </div>
+              <div class="board-list" id="boardReview"></div>
+            </section>
+          </div>
+        </div>
+      </section>
     </main>
 
     <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
     <script type="module" src="./header-auth.js"></script>
+    <script type="module" src="./home.js"></script>
   </body>
 </html>
