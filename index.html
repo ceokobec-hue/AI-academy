@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>김지백 AI경영아카데미</title>
+    <meta
+      name="description"
+      content="자! 드가자! AI경영, 한 번 해보시지예! 김지백 AI경영아카데미"
+    />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./script.js"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="#">
+          <span class="brand-avatar" aria-hidden="true">
+            <span class="brand-avatar-inner"></span>
+          </span>
+          <span class="brand-text">
+            <span class="brand-title">김지백</span>
+            <span class="brand-sub">AI경영아카데미</span>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="주요 메뉴">
+          <a class="nav-link" href="#courses" data-toast="강의수강은 준비 중입니다.">강의수강</a>
+          <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
+          <a class="nav-link" href="#community" data-toast="커뮤니티는 준비 중입니다.">커뮤니티</a>
+          <a class="nav-link" href="#login" data-toast="로그인은 준비 중입니다.">로그인</a>
+          <a class="nav-link" href="#signup" data-toast="회원가입은 준비 중입니다.">회원가입</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="hero" aria-label="메인 소개">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <h1 class="hero-title">
+              자! 드가자! AI경영,<br />
+              한 번 해보시지예!
+            </h1>
+
+            <p class="hero-desc">
+              어렵다카더라도 걱정 마소.<br />
+              김지백이 차근차근 가르쳐믄 된다 아이가.
+            </p>
+
+            <div class="hero-actions" role="group" aria-label="주요 액션">
+              <button class="btn btn-primary" type="button" id="btnEnroll">
+                수강하러 가자잉
+              </button>
+              <button class="btn btn-ghost" type="button" id="btnTrial">
+                무료 체험 한 번 해보시지예
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
+  </body>
+</html>
