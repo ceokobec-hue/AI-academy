@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>강의 상세 | 김지백 AI경영아카데미</title>
+    <meta name="description" content="강의 상세 정보 및 수강 페이지" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./script.js"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="./index.html">
+          <span class="brand-avatar" aria-hidden="true">
+            <span class="brand-avatar-inner"></span>
+          </span>
+          <span class="brand-text">
+            <span class="brand-title">김지백</span>
+            <span class="brand-sub">AI경영아카데미</span>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="주요 메뉴">
+          <a class="nav-link is-active" href="./course.html">강의수강</a>
+          <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
+          <a class="nav-link" href="#community" data-toast="커뮤니티는 준비 중입니다.">커뮤니티</a>
+          <a class="nav-link" data-auth-link="login" href="./login.html">로그인</a>
+          <a class="nav-link" data-auth-link="signup" href="./signup.html">회원가입</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="course-section">
+        <div class="container">
+          <a class="back-link" href="./course.html">← 강의 목록으로</a>
+
+          <div id="courseHeader" class="course-header"></div>
+
+          <div class="course-layout">
+            <section class="course-panel">
+              <h2 class="panel-title">교육 영상</h2>
+              <div id="courseVideo" class="video-box"></div>
+            </section>
+
+            <aside class="course-side">
+              <div class="card course-side-card">
+                <h3 class="side-title">수강 정보</h3>
+                <div id="courseMeta" class="side-meta"></div>
+                <div id="courseCTA" class="side-cta"></div>
+                <p class="hint" style="margin-top: 12px;">
+                  결제 연동 전이라 “수강 신청(테스트)”는 임시 기능입니다.
+                </p>
+              </div>
+            </aside>
+          </div>
+
+          <section class="course-panel">
+            <h2 class="panel-title">강의 내용</h2>
+            <div id="courseContent" class="content-box"></div>
+          </section>
+
+          <section class="course-panel">
+            <h2 class="panel-title">코드/자료</h2>
+            <div id="courseResources" class="resources-box"></div>
+          </section>
+
+          <section class="course-panel">
+            <h2 class="panel-title">첨부파일</h2>
+            <div id="courseFiles" class="files-box"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
+    <script type="module" src="./header-auth.js"></script>
+    <script type="module" src="./lesson.js"></script>
+  </body>
+</html>
+

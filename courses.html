@@ -3,11 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>김지백 AI경영아카데미</title>
-    <meta
-      name="description"
-      content="자! 드가자! AI경영, 한 번 해보시지예! 김지백 AI경영아카데미"
-    />
+    <title>강의수강 | 김지백 AI경영아카데미</title>
+    <meta name="description" content="강의를 선택하고 수강을 시작하세요." />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -25,7 +22,7 @@
 
     <header class="site-header">
       <div class="container header-inner">
-        <a class="brand" href="#">
+        <a class="brand" href="./index.html">
           <span class="brand-avatar" aria-hidden="true">
             <span class="brand-avatar-inner"></span>
           </span>
@@ -36,7 +33,7 @@
         </a>
 
         <nav class="nav" aria-label="주요 메뉴">
-          <a class="nav-link" href="./course.html">강의수강</a>
+          <a class="nav-link is-active" href="./course.html" aria-current="page">강의수강</a>
           <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
           <a class="nav-link" href="#community" data-toast="커뮤니티는 준비 중입니다.">커뮤니티</a>
           <a class="nav-link" data-auth-link="login" href="./login.html">로그인</a>
@@ -46,27 +43,13 @@
     </header>
 
     <main id="main" class="page">
-      <section class="hero" aria-label="메인 소개">
-        <div class="container hero-grid">
-          <div class="hero-copy">
-            <h1 class="hero-title">
-              자! 드가자! AI경영,<br />
-              한 번 해보시지예!
-            </h1>
-
-            <p class="hero-desc">
-              어렵다카더라도 걱정 마소.<br />
-              김지백이 차근차근 가르쳐믄 된다 아이가.
+      <section class="courses-section">
+        <div class="container">
+          <div class="page-head">
+            <h1 class="page-title">강의 페이지가 변경되었습니다</h1>
+            <p class="page-sub">
+              강의 카탈로그는 이제 <a class="link" href="./course.html">여기(강의수강)</a>에서 확인할 수 있어요.
             </p>
-
-            <div class="hero-actions" role="group" aria-label="주요 액션">
-              <button class="btn btn-primary" type="button" id="btnEnroll">
-                수강하러 가자잉
-              </button>
-              <button class="btn btn-ghost" type="button" id="btnTrial">
-                무료 체험 한 번 해보시지예
-              </button>
-            </div>
           </div>
         </div>
       </section>
@@ -74,5 +57,12 @@
 
     <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
     <script type="module" src="./header-auth.js"></script>
+    <script>
+      // Backward compatibility: old URL redirects to new catalog
+      window.setTimeout(() => {
+        window.location.replace("./course.html");
+      }, 700);
+    </script>
   </body>
 </html>
+
