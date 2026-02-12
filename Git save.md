@@ -14,8 +14,8 @@ git push
 
 
 # 🔥 큰 수정 전에 안전 스냅샷용
-git add .
-git commit -m "수정 전 백업"
+"git add .
+git commit -m "수정 전 백업
 
 # 🔎 커밋 기록 확인
 git log --oneline

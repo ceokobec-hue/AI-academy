@@ -36,8 +36,8 @@
           <a class="nav-link" href="#courses" data-toast="강의수강은 준비 중입니다.">강의수강</a>
           <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
           <a class="nav-link" href="#community" data-toast="커뮤니티는 준비 중입니다.">커뮤니티</a>
-          <a class="nav-link is-active" href="./login.html" aria-current="page">로그인</a>
-          <a class="nav-link" href="./signup.html">회원가입</a>
+          <a class="nav-link is-active" data-auth-link="login" href="./login.html" aria-current="page">로그인</a>
+          <a class="nav-link" data-auth-link="signup" href="./signup.html">회원가입</a>
         </nav>
       </div>
     </header>
@@ -126,6 +126,7 @@
     <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
     <script type="module">
       import "./auth.js";
+      import "./header-auth.js";
       // second close button
       document.getElementById("resetClose2")?.addEventListener("click", () => {
         document.getElementById("resetModal")?.close();

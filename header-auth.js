@@ -1,0 +1,140 @@
+import {
+  getApp,
+  getApps,
+  initializeApp,
+} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+import {
+  getAuth,
+  onAuthStateChanged,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+import {
+  doc,
+  getDoc,
+  getFirestore,
+} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+
+import { firebaseConfig } from "./firebase-config.js";
+
+const CONFIG_PLACEHOLDER = "YOUR_";
+
+function isConfigReady(cfg) {
+  if (!cfg) return false;
+  const requiredKeys = ["apiKey", "authDomain", "projectId"];
+  return requiredKeys.every((k) => {
+    const v = cfg[k];
+    return typeof v === "string" && v.length > 0 && !v.includes(CONFIG_PLACEHOLDER);
+  });
+}
+
+function ensureFirebase() {
+  if (!isConfigReady(firebaseConfig)) return null;
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  return { auth, db };
+}
+
+function findAuthLinks() {
+  const loginLink = document.querySelector('[data-auth-link="login"]');
+  const signupLink = document.querySelector('[data-auth-link="signup"]');
+  return { loginLink, signupLink };
+}
+
+function ensureAuthUIContainer({ signupLink, loginLink }) {
+  const existing = document.querySelector("[data-auth-ui]");
+  if (existing) return existing;
+
+  const container = document.createElement("span");
+  container.className = "nav-auth";
+  container.dataset.authUi = "true";
+
+  // Prefer placing where login/signup live
+  const anchor = signupLink || loginLink;
+  if (anchor?.parentElement) {
+    anchor.parentElement.insertBefore(container, anchor.nextSibling);
+  } else {
+    document.querySelector("nav.nav")?.appendChild(container);
+  }
+  return container;
+}
+
+function renderLoggedOut({ loginLink, signupLink, authUI }) {
+  if (loginLink) loginLink.style.display = "";
+  if (signupLink) signupLink.style.display = "";
+  if (authUI) authUI.textContent = "";
+}
+
+function renderLoggedIn({ loginLink, signupLink, authUI, displayName, onLogout }) {
+  if (loginLink) loginLink.style.display = "none";
+  if (signupLink) signupLink.style.display = "none";
+  if (!authUI) return;
+
+  authUI.innerHTML = "";
+
+  const nameEl = document.createElement("span");
+  nameEl.className = "nav-user";
+  nameEl.textContent = `${displayName}님`;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "nav-logout";
+  btn.textContent = "로그아웃";
+  btn.addEventListener("click", onLogout);
+
+  authUI.append(nameEl, btn);
+}
+
+async function getDisplayName({ user, db }) {
+  // Preference: nickname > name > email
+  try {
+    const snap = await getDoc(doc(db, "users", user.uid));
+    if (snap.exists()) {
+      const data = snap.data() || {};
+      const profile = data.profile || {};
+      const nickname = typeof profile.nickname === "string" ? profile.nickname.trim() : "";
+      const name = typeof profile.name === "string" ? profile.name.trim() : "";
+      if (nickname) return nickname;
+      if (name) return name;
+    }
+  } catch (e) {
+    // ignore (rules/network/etc) and fall back
+    console.warn("Failed to fetch profile for header display.", e);
+  }
+
+  return user.displayName || user.email || "내 계정";
+}
+
+function wireHeaderAuth() {
+  const fb = ensureFirebase();
+  if (!fb) return;
+
+  const { auth, db } = fb;
+  const { loginLink, signupLink } = findAuthLinks();
+  const authUI = ensureAuthUIContainer({ signupLink, loginLink });
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      renderLoggedOut({ loginLink, signupLink, authUI });
+      return;
+    }
+
+    const displayName = await getDisplayName({ user, db });
+    renderLoggedIn({
+      loginLink,
+      signupLink,
+      authUI,
+      displayName,
+      onLogout: async () => {
+        try {
+          await signOut(auth);
+        } finally {
+          window.location.href = "./index.html";
+        }
+      },
+    });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", wireHeaderAuth);
+

@@ -193,12 +193,12 @@ a {
 .brand-title {
   font-weight: 800;
   letter-spacing: -0.02em;
-  font-size: 1.05rem; /* ~19px */
+  font-size: 1.26rem; /* ~1.2x */
 }
 
 .brand-sub {
   font-weight: 700;
-  font-size: 0.95rem; /* ~17px */
+  font-size: 1.14rem; /* ~1.2x */
   opacity: 0.9;
 }
 
@@ -210,7 +210,7 @@ a {
 }
 
 .nav-link {
-  font-size: 1rem; /* ~18px */
+  font-size: 1.2rem; /* ~1.2x */
   padding: 8px 6px;
   color: rgba(255, 255, 255, 0.82);
   transition: color 160ms ease, transform 160ms ease;
@@ -219,6 +219,42 @@ a {
 .nav-link:hover {
   color: rgba(255, 255, 255, 0.98);
   transform: translateY(-1px);
+}
+
+.nav-auth {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 6px;
+}
+
+.nav-user {
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: -0.01em;
+  font-size: 1.2rem; /* 메뉴와 균형 */
+}
+
+.nav-logout {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 900;
+  font-size: 1.14rem; /* ~1.2x */
+  cursor: pointer;
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.nav-logout:hover {
+  background: rgba(255, 255, 255, 0.085);
+  transform: translateY(-1px);
+}
+
+.nav-logout:active {
+  transform: translateY(0);
 }
 
 .nav-link.is-active {

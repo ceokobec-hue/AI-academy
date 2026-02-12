@@ -1,12 +1,18 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+import {
+  getApp,
+  getApps,
+  initializeApp,
+} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
 import {
   createUserWithEmailAndPassword,
   getAuth,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  updateProfile,
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 import {
   doc,
+  getDoc,
   getFirestore,
   serverTimestamp,
   setDoc,
@@ -46,13 +52,23 @@ function collectCheckedValues(name) {
   );
 }
 
+function withTimeout(promise, ms, label) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(`${label} 요청이 지연되고 있습니다. (timeout ${ms}ms)`));
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+
 async function ensureFirebase() {
   if (!isConfigReady(firebaseConfig)) {
     throw new Error(
       "Firebase 설정이 비어있습니다. firebase-config.js에 값을 먼저 채워주세요.",
     );
   }
-  const app = initializeApp(firebaseConfig);
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
   return { auth, db };
@@ -105,12 +121,26 @@ async function handleSignupSubmit(e) {
 
   try {
     const { auth, db } = await ensureFirebase();
-    setStatus(msgEl, "계정 생성 중...", "info");
+    setStatus(msgEl, "1/2 계정 생성 중...", "info");
 
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    const cred = await withTimeout(
+      createUserWithEmailAndPassword(auth, email, password),
+      15000,
+      "계정 생성",
+    );
     const uid = cred.user.uid;
 
-    await setDoc(doc(db, "users", uid), {
+    // 헤더에서 이메일 대신 별명 표시를 위해 Auth 프로필에도 저장
+    try {
+      await withTimeout(updateProfile(cred.user, { displayName: nickname }), 15000, "프로필 저장");
+    } catch (e) {
+      // Firestore 저장은 계속 진행 (displayName 저장 실패는 치명적이지 않음)
+      console.warn("Failed to set displayName.", e);
+    }
+
+    setStatus(msgEl, "2/2 설문 저장 중...", "info");
+    await withTimeout(
+      setDoc(doc(db, "users", uid), {
       profile: {
         name,
         nickname,
@@ -134,7 +164,10 @@ async function handleSignupSubmit(e) {
       },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+      }),
+      15000,
+      "설문 저장",
+    );
 
     setStatus(msgEl, "회원가입 완료! 로그인 페이지로 이동합니다.", "success");
     window.setTimeout(() => {
@@ -142,7 +175,12 @@ async function handleSignupSubmit(e) {
     }, 900);
   } catch (err) {
     console.error(err);
-    setStatus(msgEl, `회원가입 실패: ${err?.message || "알 수 없는 오류"}`, "error");
+    const msg = err?.message || String(err) || "알 수 없는 오류";
+    setStatus(
+      msgEl,
+      `회원가입 처리 중 문제가 발생했습니다: ${msg}\n(브라우저 개발자도구 Console/Network 탭의 에러를 함께 확인해 주세요)`,
+      "error",
+    );
   }
 }
 
@@ -163,9 +201,67 @@ async function handleLoginSubmit(e) {
   }
 
   try {
-    const { auth } = await ensureFirebase();
-    setStatus(msgEl, "로그인 중...", "info");
-    await signInWithEmailAndPassword(auth, email, password);
+    const { auth, db } = await ensureFirebase();
+    setStatus(msgEl, "1/2 로그인 중...", "info");
+    const cred = await withTimeout(
+      signInWithEmailAndPassword(auth, email, password),
+      15000,
+      "로그인",
+    );
+
+    // 로그인만으로도 Firestore에 기록이 남도록 보장 (없으면 생성, 있으면 lastLoginAt 업데이트)
+    setStatus(msgEl, "2/2 사용자 정보 확인 중...", "info");
+    const uid = cred.user.uid;
+    const userRef = doc(db, "users", uid);
+
+    const snap = await withTimeout(getDoc(userRef), 15000, "사용자 정보 조회");
+    const baseDoc = {
+      profile: {
+        email: cred.user.email || email,
+      },
+      lastLoginAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    if (!snap.exists()) {
+      await withTimeout(
+        setDoc(
+          userRef,
+          {
+            ...baseDoc,
+            createdAt: serverTimestamp(),
+            profile: {
+              name: "",
+              nickname: "",
+              email: cred.user.email || email,
+            },
+            survey: {
+              industry: "",
+              role: "",
+              companySize: "",
+              aiGoals: [],
+              priority: "",
+              aiLevel: "",
+              weeklyTime: "",
+              painPoints: [],
+              note: "",
+            },
+            consent: {
+              agreeTerms: false,
+              agreePrivacy: false,
+              agreeMarketing: false,
+            },
+            profileIncomplete: true,
+          },
+          { merge: true },
+        ),
+        15000,
+        "사용자 정보 생성",
+      );
+    } else {
+      await withTimeout(setDoc(userRef, baseDoc, { merge: true }), 15000, "로그인 기록 저장");
+    }
+
     setStatus(msgEl, "로그인 성공! 메인으로 이동합니다.", "success");
     window.setTimeout(() => {
       window.location.href = "./index.html";
