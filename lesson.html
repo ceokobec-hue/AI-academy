@@ -52,6 +52,12 @@
           <div class="course-layout">
             <section class="course-panel">
               <h2 class="panel-title">교육 영상</h2>
+              <div class="lesson-nav-mobile" id="lessonNavMobile" aria-label="레슨 목록"></div>
+              <div class="lesson-nav-row">
+                <button class="btn btn-ghost btn-sm" type="button" id="btnLessonPrev">← 이전</button>
+                <div class="muted" id="lessonNow" style="font-weight:900;"></div>
+                <button class="btn btn-ghost btn-sm" type="button" id="btnLessonNext">다음 →</button>
+              </div>
               <div id="courseVideo" class="video-box"></div>
             </section>
 
@@ -63,6 +69,11 @@
                 <p class="hint" style="margin-top: 12px;">
                   결제 연동 전이라 “수강 신청(테스트)”는 임시 기능입니다.
                 </p>
+              </div>
+
+              <div class="card course-side-card lesson-outline" id="lessonOutlineCard">
+                <h3 class="side-title">목차</h3>
+                <div id="lessonOutline" class="lesson-outline-list" aria-label="레슨 목차"></div>
               </div>
             </aside>
           </div>

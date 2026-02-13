@@ -5,9 +5,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
   getFirestore,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
@@ -143,21 +147,32 @@ function renderVideo({ course, user, enrolled }) {
   `;
 }
 
-function renderContent(course) {
+function renderContent(unit) {
   const el = $("courseContent");
   if (!el) return;
 
-  const bullets = (course.content?.bullets || []).map((b) => `<li>${esc(b)}</li>`).join("");
+  const bullets = (unit.content?.bullets || []).map((b) => `<li>${esc(b)}</li>`).join("");
   el.innerHTML = `
-    <p style="margin:0;">${esc(course.content?.overview || "")}</p>
+    <p style="margin:0;">${esc(unit.content?.overview || "")}</p>
     ${bullets ? `<ul style="margin:12px 0 0; padding-left: 1.2em;">${bullets}</ul>` : ""}
   `;
 }
 
-function renderResources(course) {
+function renderResources(unit, { user, enrolled }) {
   const el = $("courseResources");
   if (!el) return;
-  const items = course.resources || [];
+
+  if (!user || !enrolled) {
+    el.innerHTML = `
+      <div class="locked">
+        <p class="locked-title">수강 신청 후 열람 가능</p>
+        <p class="locked-sub">코드/자료는 수강 신청 후 확인할 수 있어요.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const items = unit.resources || [];
   if (!items.length) {
     el.innerHTML = `<p class="muted" style="margin:0;">자료가 아직 없습니다.</p>`;
     return;
@@ -176,10 +191,21 @@ function renderResources(course) {
     .join("");
 }
 
-function renderFiles(course) {
+function renderFiles(unit, { user, enrolled }) {
   const el = $("courseFiles");
   if (!el) return;
-  const files = course.files || [];
+
+  if (!user || !enrolled) {
+    el.innerHTML = `
+      <div class="locked">
+        <p class="locked-title">수강 신청 후 다운로드 가능</p>
+        <p class="locked-sub">첨부파일은 수강 신청 후 다운로드할 수 있어요.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const files = unit.files || [];
   if (!files.length) {
     el.innerHTML = `<p class="muted" style="margin:0;">첨부파일이 아직 없습니다.</p>`;
     return;
@@ -253,14 +279,133 @@ function normalizeCourse(c, idFallback) {
   };
 }
 
+function normalizeLesson(l, idFallback, orderFallback) {
+  if (!l) return null;
+  return {
+    id: String(l.id || idFallback || ""),
+    order: Number.isFinite(Number(l.order)) ? Number(l.order) : Number(orderFallback || 0),
+    title: String(l.title || ""),
+    video: l.video || { src: "", poster: "" },
+    content: l.content || { overview: "", bullets: [] },
+    resources: Array.isArray(l.resources) ? l.resources : [],
+    files: Array.isArray(l.files) ? l.files : [],
+  };
+}
+
+async function fetchLessonsFromFirestore(db, courseId) {
+  try {
+    const q = query(collection(db, "courses", courseId, "lessons"), orderBy("order", "asc"));
+    const snap = await getDocs(q);
+    return snap.docs.map((d, idx) => normalizeLesson({ id: d.id, ...d.data() }, d.id, idx + 1)).filter(Boolean);
+  } catch (e) {
+    console.warn("Failed to fetch lessons.", e);
+    return [];
+  }
+}
+
+function getSelectedLessonParam() {
+  return qs().get("l") || "";
+}
+
+function setSelectedLessonParam(value) {
+  const url = new URL(window.location.href);
+  if (!value) url.searchParams.delete("l");
+  else url.searchParams.set("l", value);
+  window.history.replaceState({}, "", url.toString());
+}
+
+function animateSwap(dir) {
+  const ids = ["courseVideo", "courseContent", "courseResources", "courseFiles"];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove("lesson-anim");
+    el.removeAttribute("data-dir");
+    // force reflow
+    void el.offsetWidth;
+    el.classList.add("lesson-anim");
+    el.dataset.dir = dir;
+    window.setTimeout(() => {
+      el.classList.remove("lesson-anim");
+      el.removeAttribute("data-dir");
+    }, 260);
+  });
+}
+
+function renderLessonNavMobileChips({ lessons, selectedId, onSelect }) {
+  const wrap = $("lessonNavMobile");
+  if (!wrap) return;
+  wrap.innerHTML = lessons
+    .map((l, idx) => {
+      const active = l.id === selectedId ? "is-active" : "";
+      const label = l.title || `${idx + 1}강`;
+      return `<button class="lesson-chip ${active}" type="button" data-lesson-id="${esc(l.id)}">${esc(label)}</button>`;
+    })
+    .join("");
+
+  wrap.querySelectorAll("[data-lesson-id]").forEach((btn) => {
+    btn.addEventListener("click", () => onSelect(btn.getAttribute("data-lesson-id") || "", "next"));
+  });
+}
+
+function renderLessonOutlineDesktop({ lessons, selectedId, onSelect }) {
+  const wrap = $("lessonOutline");
+  const card = $("lessonOutlineCard");
+  if (!wrap || !card) return;
+  if (!lessons.length) {
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "";
+
+  wrap.innerHTML = lessons
+    .map((l, idx) => {
+      const active = l.id === selectedId ? "is-active" : "";
+      const title = l.title || `${idx + 1}강`;
+      return `
+        <div class="lesson-outline-item ${active}" role="button" tabindex="0" data-lesson-id="${esc(l.id)}">
+          <div class="lesson-outline-title">${esc(title)}</div>
+          <div class="lesson-outline-sub">레슨 ${idx + 1}</div>
+        </div>
+      `;
+    })
+    .join("");
+
+  const bind = (el) => {
+    el.addEventListener("click", () => onSelect(el.getAttribute("data-lesson-id") || "", "next"));
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onSelect(el.getAttribute("data-lesson-id") || "", "next");
+      }
+    });
+  };
+  wrap.querySelectorAll("[data-lesson-id]").forEach(bind);
+}
+
+function updateLessonNow({ lessons, selectedIndex }) {
+  const el = $("lessonNow");
+  if (!el) return;
+  if (!lessons.length) {
+    el.textContent = "";
+    return;
+  }
+  el.textContent = `${selectedIndex + 1} / ${lessons.length}`;
+}
+
 async function boot() {
   const id = qs().get("id") || "";
   const fb = ensureFirebase();
   let course = null;
+  let lessons = [];
+  let selectedId = "";
+  let currentUser = null;
+  let currentEnrolled = false;
 
   if (fb) {
     const fromDb = await fetchCourseFromFirestore(fb.db, id);
     course = normalizeCourse(fromDb, id);
+    lessons = await fetchLessonsFromFirestore(fb.db, id);
   }
 
   if (!course) {
@@ -272,25 +417,103 @@ async function boot() {
     return;
   }
 
-  renderContent(course);
-  renderResources(course);
-  renderFiles(course);
+  // Fallback lesson when lessons are missing
+  if (!lessons.length) {
+    lessons = [
+      normalizeLesson(
+        {
+          id: "main",
+          order: 1,
+          title: "레슨 1",
+          video: course.video,
+          content: course.content,
+          resources: course.resources,
+          files: course.files,
+        },
+        "main",
+        1,
+      ),
+    ].filter(Boolean);
+  }
+
+  const pickInitial = () => {
+    const p = getSelectedLessonParam();
+    if (p) {
+      const exact = lessons.find((l) => l.id === p);
+      if (exact) return exact.id;
+      // allow numeric index (1-based)
+      const n = Number(p);
+      if (Number.isFinite(n) && n >= 1 && n <= lessons.length) return lessons[n - 1].id;
+    }
+    return lessons[0]?.id || "";
+  };
+  selectedId = pickInitial();
+  if (selectedId) setSelectedLessonParam(selectedId);
+
+  const selectLesson = (nextId, dir = "next") => {
+    if (!nextId || nextId === selectedId) return;
+    selectedId = nextId;
+    setSelectedLessonParam(selectedId);
+    animateSwap(dir);
+    renderAll();
+  };
+
+  const getSelectedIndex = () => lessons.findIndex((l) => l.id === selectedId);
+  const getSelectedLesson = () => lessons.find((l) => l.id === selectedId) || lessons[0] || null;
+
+  const renderAll = () => {
+    const idx = Math.max(0, getSelectedIndex());
+    const lesson = getSelectedLesson();
+    updateLessonNow({ lessons, selectedIndex: idx });
+    renderLessonNavMobileChips({
+      lessons,
+      selectedId,
+      onSelect: (id2, dir) => selectLesson(id2, dir),
+    });
+    renderLessonOutlineDesktop({
+      lessons,
+      selectedId,
+      onSelect: (id2, dir) => selectLesson(id2, dir),
+    });
+
+    if (lesson) {
+      renderContent(lesson);
+      renderResources(lesson, { user: currentUser, enrolled: currentEnrolled });
+      renderFiles(lesson, { user: currentUser, enrolled: currentEnrolled });
+      renderVideo({ course: lesson, user: currentUser, enrolled: currentEnrolled });
+    }
+  };
+
+  document.getElementById("btnLessonPrev")?.addEventListener("click", () => {
+    const idx = getSelectedIndex();
+    if (idx <= 0) return;
+    selectLesson(lessons[idx - 1].id, "prev");
+  });
+  document.getElementById("btnLessonNext")?.addEventListener("click", () => {
+    const idx = getSelectedIndex();
+    if (idx < 0 || idx >= lessons.length - 1) return;
+    selectLesson(lessons[idx + 1].id, "next");
+  });
 
   // Default (logged out)
   renderHeader(course, { enrolled: false });
   renderMeta(course, { enrolled: false });
   renderCTA({ course, user: null, enrolled: false, onEnroll: () => {} });
-  renderVideo({ course, user: null, enrolled: false });
+  currentUser = null;
+  currentEnrolled = false;
+  renderAll();
 
   if (!fb) return;
   const { auth, db } = fb;
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
+      currentUser = null;
+      currentEnrolled = false;
       renderHeader(course, { enrolled: false });
       renderMeta(course, { enrolled: false });
       renderCTA({ course, user: null, enrolled: false, onEnroll: () => {} });
-      renderVideo({ course, user: null, enrolled: false });
+      renderAll();
       return;
     }
 
@@ -309,6 +532,8 @@ async function boot() {
         enrolled = false;
       }
 
+      currentUser = user;
+      currentEnrolled = enrolled;
       renderHeader(course, { enrolled });
       renderMeta(course, { enrolled });
       renderCTA({
@@ -327,7 +552,7 @@ async function boot() {
           document.getElementById("courseVideo")?.scrollIntoView({ behavior: "smooth" });
         },
       });
-      renderVideo({ course, user, enrolled });
+      renderAll();
     };
 
     await refresh();

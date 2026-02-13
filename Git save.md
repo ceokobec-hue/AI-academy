@@ -190,3 +190,25 @@ service firebase.storage {
   createdAt: <Timestamp>
 }
 ```
+
+### 7) 강의 상세(레슨 여러 개) 컬렉션 메모
+
+- **courses/{courseId}**: 강의 기본 정보(기존)
+- **courses/{courseId}/lessons/{lessonId}**: 레슨(여러 강) 목록
+
+#### lessons 문서 예시
+
+```js
+{
+  order: 1,
+  title: "1강. AI 기초",
+  video: { src: "<StorageDownloadURL>", poster: "" },
+  content: { overview: "이 강에서 배울 것", bullets: ["핵심 1", "핵심 2"] },
+  resources: [
+    { title: "프롬프트 예시", description: "복붙해서 써봐", code: "..." }
+  ],
+  files: [
+    { name: "자료.pdf", url: "<StorageDownloadURL>", description: "요약 자료" }
+  ]
+}
+```
