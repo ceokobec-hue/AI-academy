@@ -58,7 +58,7 @@ function pickFeatured(courses, flagKey, excludeId = "") {
     .sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)))[0];
 }
 
-function courseCard(course, { enrolled }) {
+function courseCard(course, { enrolled, isAdmin }) {
   const priceOrBadge = enrolled
     ? `<span class="badge badge-success">수강 중</span>`
     : `<span class="badge badge-primary">${formatKrw(course.priceKrw)}</span>`;
@@ -75,20 +75,26 @@ function courseCard(course, { enrolled }) {
         <p class="course-desc">${esc(course.shortDescription)}</p>
         <div class="course-meta-row">
           ${priceOrBadge}
-          <span>수강기간: ${course.durationDays}일</span>
-          <span>개강일: ${esc(course.startDate)}</span>
+          <span class="badge badge-neutral">수강기간 ${course.durationDays}일</span>
         </div>
         <div class="course-actions">
           <a class="btn btn-primary btn-sm" href="./lesson.html?id=${encodeURIComponent(course.id)}"
             >강의 보기</a
           >
+          ${
+            isAdmin
+              ? `<a class="btn btn-ghost btn-sm" href="./admin.html?id=${encodeURIComponent(
+                  course.id,
+                )}">수정</a>`
+              : ""
+          }
         </div>
       </div>
     </article>
   `;
 }
 
-function featuredCard(course, label, { enrolled }) {
+function featuredCard(course, label, { enrolled, isAdmin }) {
   const badge = label === "신규 강의" ? "badge-primary" : "badge-success";
   const status = enrolled ? `<span class="badge badge-success">수강 중</span>` : "";
   return `
@@ -97,7 +103,7 @@ function featuredCard(course, label, { enrolled }) {
         <span class="badge ${badge}">${label}</span>
         ${status}
       </div>
-      ${courseCard(course, { enrolled })}
+      ${courseCard(course, { enrolled, isAdmin })}
     </div>
   `;
 }
@@ -247,13 +253,17 @@ function renderCatalog({ categories, enrollmentMap, courses, isAdmin }) {
       <div class="featured-grid">
         ${
           featuredNew
-            ? featuredCard(featuredNew, "신규 강의", { enrolled: !!enrollmentMap?.[featuredNew.id] })
+            ? featuredCard(featuredNew, "신규 강의", {
+                enrolled: !!enrollmentMap?.[featuredNew.id],
+                isAdmin,
+              })
             : ""
         }
         ${
           featuredPopular
             ? featuredCard(featuredPopular, "인기 강의", {
                 enrolled: !!enrollmentMap?.[featuredPopular.id],
+                isAdmin,
               })
             : ""
         }
@@ -280,7 +290,7 @@ function renderCatalog({ categories, enrollmentMap, courses, isAdmin }) {
             ${
               courses.length
                 ? `<div class="course-grid">${courses
-                    .map((c) => courseCard(c, { enrolled: !!enrollmentMap?.[c.id] }))
+                    .map((c) => courseCard(c, { enrolled: !!enrollmentMap?.[c.id], isAdmin }))
                     .join("")}</div>`
                 : `<p class="muted" style="margin:0;">아직 강의가 없습니다.</p>`
             }

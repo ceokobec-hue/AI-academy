@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>실시간 게시판 | 김지백 AI경영아카데미</title>
+    <meta name="description" content="날짜별 실시간 게시판: 미션 공지 + 제출" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./script.js"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="./index.html">
+          <span class="brand-avatar" aria-hidden="true">
+            <span class="brand-avatar-inner"></span>
+          </span>
+          <span class="brand-text">
+            <span class="brand-title">김지백</span>
+            <span class="brand-sub">AI경영아카데미</span>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="주요 메뉴">
+          <a class="nav-link" href="./course.html">강의수강</a>
+          <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
+          <a class="nav-link" href="./community.html">커뮤니티</a>
+          <a class="nav-link is-active" href="./realtimeboard.html" aria-current="page">실시간 게시판</a>
+          <a class="nav-link" data-auth-link="login" href="./login.html">로그인</a>
+          <a class="nav-link" data-auth-link="signup" href="./signup.html">회원가입</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <section class="community-section">
+        <div class="container">
+          <div class="page-head">
+            <h1 class="page-title">실시간 게시판</h1>
+            <p class="page-sub">
+              날짜별로 선생님(관리자)이 방을 열고, 교육생이 제출하는 공간입니다.
+              <span class="muted">회원가입 없이 바로 제출 가능(별명 입력).</span>
+            </p>
+          </div>
+
+          <section class="card rb-board-card" id="boardListCard">
+            <a class="back-link" id="boardListBack" href="./realtimeboard.html" style="display:none;">← 전체 방</a>
+            <div class="panel-head">
+              <h2 class="panel-title" id="boardListTitle" style="margin:0;">최근 방</h2>
+              <div class="panel-actions" id="boardListActions"></div>
+            </div>
+            <div id="boardList" class="post-list" aria-live="polite"></div>
+          </section>
+
+          <section class="card rb-board-card" id="boardViewCard" style="margin-top: 14px; display:none;">
+            <a class="back-link" href="./realtimeboard.html">← 방 목록으로</a>
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title" id="boardTitle" style="margin:0;">-</h2>
+                <p class="page-sub" id="boardMeta" style="margin:6px 0 0;"></p>
+              </div>
+              <div class="panel-actions" id="boardViewActions"></div>
+            </div>
+
+            <div class="filter-row" style="margin-top: 0;">
+              <div class="field" style="margin:0; width: 100%;">
+                <label class="label" for="nickInput">별명(제출용)</label>
+                <input class="input" id="nickInput" placeholder="예: 지백반 홍길동" />
+                <p class="hint" style="margin: 8px 0 0;">별명은 이 브라우저에 저장됩니다.</p>
+              </div>
+            </div>
+
+            <div id="boardFeed" class="post-list" aria-live="polite"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="modal" id="boardModal" aria-label="방 만들기">
+      <form class="modal-card modal-wide" id="boardForm" method="dialog">
+        <div class="modal-head">
+          <p class="modal-title">방 만들기(관리자)</p>
+          <button class="icon-btn" type="button" id="boardClose" aria-label="닫기">×</button>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label class="label" for="boardDate">날짜</label>
+            <input class="input" id="boardDate" type="date" required />
+          </div>
+          <div class="field">
+            <label class="label" for="boardTitleInput">방 제목</label>
+            <input class="input" id="boardTitleInput" placeholder="예: 신한대학교 2월 20일 인문계열 1반" required />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" type="submit">만들기</button>
+          <button class="btn btn-ghost" type="button" id="boardCancel">취소</button>
+        </div>
+
+        <p id="boardMsg" class="form-msg" role="status" aria-live="polite"></p>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="rbPostModal" aria-label="글 작성">
+      <form class="modal-card modal-wide" id="rbPostForm" method="dialog">
+        <div class="modal-head">
+          <p class="modal-title" id="rbPostTitle">글 작성</p>
+          <button class="icon-btn" type="button" id="rbPostClose" aria-label="닫기">×</button>
+        </div>
+
+        <div class="field" id="rbNickWrap">
+          <label class="label" for="rbNick">별명</label>
+          <input class="input" id="rbNick" required />
+        </div>
+
+        <div class="field">
+          <label class="label" for="rbTitle">제목</label>
+          <input class="input" id="rbTitle" required />
+        </div>
+
+        <div class="field">
+          <label class="label" for="rbBody">내용</label>
+          <textarea class="textarea" id="rbBody" rows="6" required></textarea>
+        </div>
+
+        <div class="field" id="rbImageWrap">
+          <label class="label" for="rbImage">사진(선택)</label>
+          <input class="input" id="rbImage" type="file" accept="image/*" />
+          <progress class="upload-progress" id="rbImageProgress" max="100" value="0"></progress>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" type="submit" id="rbSubmitBtn">올리기</button>
+          <button class="btn btn-ghost" type="button" id="rbCancelBtn">취소</button>
+        </div>
+
+        <p id="rbMsg" class="form-msg" role="status" aria-live="polite"></p>
+      </form>
+    </dialog>
+
+    <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
+    <script type="module" src="./header-auth.js"></script>
+    <script type="module" src="./realtimeboard.js"></script>
+  </body>
+</html>
+

@@ -6,10 +6,12 @@ import {
   doc,
   getDoc,
   getDocs,
+  getDocsFromServer,
   getFirestore,
   limit,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
@@ -24,6 +26,15 @@ import { firebaseConfig } from "./firebase-config.js";
 
 const CONFIG_PLACEHOLDER = "YOUR_";
 const ADMIN_EMAIL = "mentor0329@hanmail.net";
+const ADMIN_NAME = "관리자";
+const REACTIONS = [
+  { key: "thumb", emoji: "👍" },
+  { key: "heart", emoji: "❤️" },
+  { key: "fire", emoji: "🔥" },
+  { key: "party", emoji: "🎉" },
+  { key: "clap", emoji: "👏" },
+  { key: "spark", emoji: "✨" },
+];
 
 function isConfigReady(cfg) {
   if (!cfg) return false;
@@ -64,6 +75,26 @@ function setStatus(el, text, tone = "info") {
 
 function isAdmin(user) {
   return typeof user?.email === "string" && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+}
+
+function isOwner(post, user) {
+  return !!user && typeof post?.authorUid === "string" && post.authorUid === user.uid;
+}
+
+function toast(text) {
+  const stack = document.querySelector(".toast-stack");
+  if (!stack) {
+    alert(text);
+    return;
+  }
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = `<p class="toast-title" style="margin:0;">알림</p><p class="toast-body">${esc(text)}</p>`;
+  stack.appendChild(el);
+  window.setTimeout(() => {
+    el.style.animation = "toast-out 160ms ease forwards";
+    window.setTimeout(() => el.remove(), 180);
+  }, 1600);
 }
 
 function parseTags(text) {
@@ -145,7 +176,7 @@ function renderMission(mission, user) {
   }
 }
 
-function postCard(post, { showStatus = false }) {
+function postCard(post, { showStatus = false, admin = false, owner = false } = {}) {
   const img = post.imageUrl
     ? `<div class="post-image"><img src="${esc(post.imageUrl)}" alt="" loading="lazy" decoding="async" /></div>`
     : "";
@@ -163,6 +194,62 @@ function postCard(post, { showStatus = false }) {
         : `<span class="badge badge-primary">미해결</span>`
       : "";
 
+  const answerBox =
+    post.type === "question" && post.adminAnswer?.body
+      ? `
+        <div class="answer-box" aria-label="관리자 답변">
+          <div class="answer-head">관리자 답변</div>
+          <p class="answer-body">${esc(post.adminAnswer.body)}</p>
+        </div>
+      `
+      : "";
+
+  const actions =
+    post.type === "question" && (admin || owner)
+      ? `
+        <div class="post-actions" aria-label="질문 작업">
+          <div class="post-actions-left">
+            ${
+              owner
+                ? `<button class="btn btn-ghost btn-sm" type="button" data-action="editQuestion" data-post-id="${esc(
+                    post.id,
+                  )}">질문 수정</button>`
+                : ""
+            }
+          </div>
+          <div class="post-actions-right">
+            ${
+              admin
+                ? `<button class="btn btn-primary btn-sm" type="button" data-action="adminAnswer" data-post-id="${esc(
+                    post.id,
+                  )}">${post.adminAnswer?.body ? "답변 수정" : "답변 달기"}</button>`
+                : ""
+            }
+          </div>
+        </div>
+      `
+      : "";
+
+  const reactionRow =
+    post.type === "mission"
+      ? `
+        <div class="reaction-row" aria-label="리액션">
+          ${REACTIONS.map((r) => {
+            const count = Number(post.reactionCounts?.[r.key] || 0);
+            return `
+              <button class="btn btn-ghost btn-sm reaction-btn" type="button"
+                data-action="react"
+                data-post-id="${esc(post.id)}"
+                data-reaction-key="${esc(r.key)}">
+                <span class="reaction-emoji" aria-hidden="true">${r.emoji}</span>
+                <span class="reaction-count" aria-label="카운트">${count}</span>
+              </button>
+            `;
+          }).join("")}
+        </div>
+      `
+      : "";
+
   return `
     <article class="post-card">
       <div class="post-head">
@@ -175,6 +262,9 @@ function postCard(post, { showStatus = false }) {
       ${img}
       <p class="post-body">${esc(post.body)}</p>
       ${tags}
+      ${reactionRow}
+      ${answerBox}
+      ${actions}
     </article>
   `;
 }
@@ -191,9 +281,13 @@ function toDateText(ts) {
 
 async function fetchRecentPosts(db) {
   const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(60));
-  const snap = await getDocs(q);
+  const snap = await getDocsFromServer(q).catch(() => getDocs(q));
   return snap.docs.map((d) => {
     const data = d.data() || {};
+    const rawCounts = data.reactionCounts && typeof data.reactionCounts === "object" ? data.reactionCounts : {};
+    const reactionCounts = Object.fromEntries(
+      REACTIONS.map((r) => [r.key, Number(rawCounts?.[r.key] || 0)]),
+    );
     return {
       id: d.id,
       type: data.type || "",
@@ -205,13 +299,21 @@ async function fetchRecentPosts(db) {
       imageUrl: data.imageUrl || "",
       tags: Array.isArray(data.tags) ? data.tags : [],
       authorName: data.author?.displayName || data.author?.email || "익명",
+      authorUid: data.author?.uid || "",
       createdAtText: toDateText(data.createdAt),
       createdAt: data.createdAt || null,
+      reactionCounts,
+      adminAnswer: data.adminAnswer
+        ? {
+            body: String(data.adminAnswer.body || ""),
+            authorName: String(data.adminAnswer.authorName || ""),
+          }
+        : null,
     };
   });
 }
 
-function renderFeeds(posts) {
+function renderFeeds(posts, { currentUser } = {}) {
   const mission = posts.filter((p) => p.type === "mission");
   const questions = posts.filter((p) => p.type === "question");
 
@@ -234,7 +336,15 @@ function renderFeeds(posts) {
           : questions.filter((q) => q.status !== "solved");
 
     questionFeed.innerHTML = filtered.length
-      ? filtered.map((p) => postCard(p, { showStatus: true })).join("")
+      ? filtered
+          .map((p) =>
+            postCard(p, {
+              showStatus: true,
+              admin: isAdmin(currentUser),
+              owner: isOwner(p, currentUser),
+            }),
+          )
+          .join("")
       : `<div class="card empty-card">질문이 아직 없어. 궁금한 거 하나 올려봐.</div>`;
   }
 }
@@ -251,30 +361,45 @@ function wireTabs() {
   });
 }
 
-function openPostModal({ mode }) {
+function openPostModal({ mode, post = null }) {
   const modal = $("postModal");
   const titleEl = $("postModalTitle");
   const tagsWrap = $("postTagsWrap");
   const promptWrap = $("postPromptWrap");
   const imgWrap = $("postImageWrap");
   const msgEl = $("postMsg");
+  const submitBtn = document.querySelector("#postForm button[type='submit']");
 
   if (!modal || !titleEl || !tagsWrap || !promptWrap || !imgWrap || !msgEl) return;
 
   modal.dataset.mode = mode;
-  titleEl.textContent = mode === "mission" ? "미션 인증 올리기" : "질문 올리기";
+  modal.dataset.postId = post?.id || "";
+  titleEl.textContent =
+    mode === "mission" ? "미션 인증 올리기" : post?.id ? "질문 수정" : "질문 올리기";
+  if (submitBtn) submitBtn.textContent = post?.id ? "저장" : "올리기";
   tagsWrap.style.display = mode === "question" ? "" : "none";
   promptWrap.style.display = mode === "mission" ? "" : "none";
   imgWrap.style.display = mode === "mission" ? "" : "none";
 
-  $("postTitle").value = "";
-  $("postBody").value = "";
-  $("postTags").value = "";
-  $("postPrompt").value = "";
+  $("postTitle").value = post?.title || "";
+  $("postBody").value = post?.body || "";
+  $("postTags").value = (post?.tags || []).join(", ");
+  $("postPrompt").value = post?.prompt || "";
   $("postImage").value = "";
   $("postImageProgress").value = 0;
   setStatus(msgEl, "");
 
+  modal.showModal();
+}
+
+function openAnswerModal({ post }) {
+  const modal = $("answerModal");
+  const bodyEl = $("answerBody");
+  const msgEl = $("answerMsg");
+  if (!modal || !bodyEl || !msgEl) return;
+  modal.dataset.postId = post?.id || "";
+  bodyEl.value = post?.adminAnswer?.body || "";
+  setStatus(msgEl, "");
   modal.showModal();
 }
 
@@ -285,6 +410,8 @@ async function boot() {
   const mission = fb ? await fetchCurrentMission(fb.db).catch(() => null) : null;
 
   let currentUser = null;
+  let cachedPosts = [];
+  let postsById = new Map();
 
   const missionPanelActions = $("missionPanelActions");
   const questionPanelActions = $("questionPanelActions");
@@ -305,10 +432,80 @@ async function boot() {
   $("postClose")?.addEventListener("click", () => $("postModal")?.close());
   $("postCancel")?.addEventListener("click", () => $("postModal")?.close());
 
+  $("answerClose")?.addEventListener("click", () => $("answerModal")?.close());
+  $("answerCancel")?.addEventListener("click", () => $("answerModal")?.close());
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("button[data-action][data-post-id]");
+    if (!btn) return;
+    const action = btn.getAttribute("data-action") || "";
+    const id = btn.getAttribute("data-post-id") || "";
+    const post = postsById.get(id);
+    if (!post) return;
+
+    if (action === "react") {
+      if (!fb) return;
+      if (!currentUser) {
+        toast("로그인 후 리액션을 누를 수 있어요.");
+        window.location.href = "./login.html";
+        return;
+      }
+
+      const admin = isAdmin(currentUser);
+      const reactionKey = btn.getAttribute("data-reaction-key") || "";
+      const reaction = REACTIONS.find((r) => r.key === reactionKey);
+      if (!reaction) return;
+
+      const reactRef = doc(fb.db, "posts", id, "reactions", reaction.key, "users", currentUser.uid);
+      runTransaction(fb.db, async (tx) => {
+        const snap = await tx.get(reactRef);
+        if (!snap.exists()) {
+          tx.set(reactRef, { count: 1, updatedAt: serverTimestamp() });
+          return { delta: 1 };
+        }
+        const current = Number(snap.data()?.count || 0);
+        if (!admin) throw new Error("ALREADY");
+        tx.update(reactRef, { count: current + 1, updatedAt: serverTimestamp() });
+        return { delta: 1 };
+      })
+        .then((r) => {
+          // optimistic UI: cloud function will reconcile reactionCounts
+          post.reactionCounts = post.reactionCounts || {};
+          post.reactionCounts[reaction.key] = Number(post.reactionCounts?.[reaction.key] || 0) + (r?.delta || 1);
+          cachedPosts = cachedPosts.map((p) => (p.id === post.id ? post : p));
+          postsById.set(post.id, post);
+          renderFeeds(cachedPosts, { currentUser });
+        })
+        .catch((err) => {
+          if (String(err?.message || "").includes("ALREADY")) {
+            toast("이미 이 리액션을 눌렀어요.");
+            return;
+          }
+          console.error(err);
+          toast("리액션 처리에 실패했어요. 잠시 후 다시 시도해줘.");
+        });
+      return;
+    }
+
+    if (action === "adminAnswer") {
+      if (!currentUser || !isAdmin(currentUser)) return;
+      openAnswerModal({ post });
+      return;
+    }
+
+    if (action === "editQuestion") {
+      if (!currentUser || !isOwner(post, currentUser)) return;
+      openPostModal({ mode: "question", post });
+      return;
+    }
+  });
+
   $("questionFilter")?.addEventListener("change", async () => {
     if (!fb) return;
     const posts = await fetchRecentPosts(fb.db).catch(() => []);
-    renderFeeds(posts);
+    cachedPosts = posts;
+    postsById = new Map(posts.map((p) => [p.id, p]));
+    renderFeeds(posts, { currentUser });
   });
 
   const form = $("postForm");
@@ -321,7 +518,9 @@ async function boot() {
       return;
     }
 
-    const mode = $("postModal")?.dataset?.mode || "mission";
+    const modalEl = $("postModal");
+    const mode = modalEl?.dataset?.mode || "mission";
+    const editId = modalEl?.dataset?.postId || "";
     const msgEl = $("postMsg");
     setStatus(msgEl, "저장 중...", "info");
 
@@ -336,6 +535,38 @@ async function boot() {
     }
 
     try {
+      // Edit (question only)
+      if (editId) {
+        const existing = postsById.get(editId);
+        if (!existing) {
+          setStatus(msgEl, "수정할 글을 찾지 못했어요. 새로고침 후 다시 시도해줘.", "error");
+          return;
+        }
+        if (mode !== "question") {
+          setStatus(msgEl, "현재는 질문 글만 수정할 수 있어요.", "error");
+          return;
+        }
+        if (!isOwner(existing, currentUser)) {
+          setStatus(msgEl, "본인 글만 수정할 수 있어요.", "error");
+          return;
+        }
+
+        await updateDoc(doc(fb.db, "posts", editId), {
+          title,
+          body,
+          tags,
+          updatedAt: serverTimestamp(),
+        });
+
+        setStatus(msgEl, "수정 완료! 목록을 새로 불러올게.", "success");
+        window.setTimeout(() => $("postModal")?.close(), 500);
+        const posts = await fetchRecentPosts(fb.db).catch(() => []);
+        cachedPosts = posts;
+        postsById = new Map(posts.map((p) => [p.id, p]));
+        renderFeeds(posts, { currentUser });
+        return;
+      }
+
       // 1) 글 먼저 생성
       const postRef = await addDoc(collection(fb.db, "posts"), {
         type: mode,
@@ -382,12 +613,63 @@ async function boot() {
     }
 
     const posts = await fetchRecentPosts(fb.db).catch(() => []);
-    renderFeeds(posts);
+    cachedPosts = posts;
+    postsById = new Map(posts.map((p) => [p.id, p]));
+    renderFeeds(posts, { currentUser });
+  });
+
+  const answerForm = $("answerForm");
+  answerForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!fb) return;
+    const modal = $("answerModal");
+    const msgEl = $("answerMsg");
+    if (!modal || !msgEl) return;
+    if (!currentUser || !isAdmin(currentUser)) {
+      setStatus(msgEl, "관리자만 답변을 저장할 수 있어요.", "error");
+      return;
+    }
+
+    const postId = modal.dataset.postId || "";
+    const post = postsById.get(postId);
+    if (!post || post.type !== "question") {
+      setStatus(msgEl, "대상 질문을 찾지 못했어요. 새로고침 후 다시 시도해줘.", "error");
+      return;
+    }
+
+    const body = String($("answerBody")?.value || "").trim();
+    if (!body) {
+      setStatus(msgEl, "답변 내용을 입력해줘.", "error");
+      return;
+    }
+
+    setStatus(msgEl, "저장 중...", "info");
+    try {
+      await updateDoc(doc(fb.db, "posts", postId), {
+        adminAnswer: {
+          body,
+          authorName: currentUser.displayName || currentUser.email || ADMIN_NAME,
+          updatedAt: serverTimestamp(),
+        },
+        status: "solved",
+        updatedAt: serverTimestamp(),
+      });
+      setStatus(msgEl, "저장 완료!", "success");
+      window.setTimeout(() => $("answerModal")?.close(), 500);
+    } catch (err) {
+      console.error(err);
+      setStatus(msgEl, `저장 실패: ${err?.message || "오류"}`, "error");
+    }
+
+    const posts = await fetchRecentPosts(fb.db).catch(() => []);
+    cachedPosts = posts;
+    postsById = new Map(posts.map((p) => [p.id, p]));
+    renderFeeds(posts, { currentUser });
   });
 
   if (!fb) {
     renderMission(mission, null);
-    renderFeeds([]);
+    renderFeeds([], { currentUser: null });
     return;
   }
 
@@ -402,7 +684,9 @@ async function boot() {
     }
 
     const posts = await fetchRecentPosts(fb.db).catch(() => []);
-    renderFeeds(posts);
+    cachedPosts = posts;
+    postsById = new Map(posts.map((p) => [p.id, p]));
+    renderFeeds(posts, { currentUser });
   });
 }
 

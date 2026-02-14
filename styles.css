@@ -316,12 +316,14 @@ a {
   display: grid;
   grid-template-columns: 1fr; /* 세로형 */
   gap: 16px;
-  padding: 18px;
+  padding: 22px;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.06);
   box-shadow: 0 26px 70px rgba(0, 0, 0, 0.18);
   transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+  height: 100%;
+  grid-template-rows: auto 1fr;
 }
 
 .course-card:hover {
@@ -352,9 +354,11 @@ a {
 }
 
 .course-body {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   align-content: start;
-  gap: 10px;
+  gap: 12px;
+  min-width: 0;
 }
 
 .course-title {
@@ -403,11 +407,56 @@ a {
   background: rgba(90, 255, 160, 0.12);
 }
 
+.badge-neutral {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.12);
+  color: rgba(255, 255, 255, 0.86);
+}
+
 .course-actions {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  margin-top: 2px;
+  margin-top: auto;
+}
+
+/* Catalog readability: 2-column only on wide screens + uniform card heights */
+@media (min-width: 1080px) {
+  .course-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Reduce visual dominance in 2-col (info-first cards) */
+  .course-thumb {
+    height: 300px;
+  }
+
+  /* Clamp text to keep card heights consistent */
+  .course-title,
+  .course-desc {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .course-title {
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    min-height: calc(1.25em * 2);
+  }
+
+  .course-desc {
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
+    min-height: calc(1.55em * 3);
+  }
+
+  /* Meta row: keep chips clean and readable */
+  .course-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
 }
 
 .featured-grid {
@@ -431,6 +480,21 @@ a {
   align-items: center;
   flex-wrap: wrap;
   margin-bottom: 10px;
+}
+
+/* Featured cards: avoid "card-in-card" outline/shadow overflow */
+.featured-card .course-card {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  height: auto;
+}
+
+.featured-card .course-card:hover {
+  transform: none;
+  background: transparent;
+  border-color: transparent;
 }
 
 .category-section {
@@ -762,7 +826,8 @@ a {
 
 @media (max-width: 560px) {
   .course-thumb {
-    height: 220px;
+    aspect-ratio: 16 / 9;
+    height: auto;
   }
 }
 
@@ -1171,6 +1236,11 @@ a {
   padding: 70px 0 84px;
 }
 
+/* Reduce gap between hero CTA and first home section */
+.hero + .home-section {
+  padding-top: 28px;
+}
+
 .home-section {
   padding: 44px 0 70px;
 }
@@ -1543,7 +1613,7 @@ a {
 
 .hero-desc {
   margin: 0 0 28px;
-  font-size: 1.05rem;
+  font-size: clamp(1.15rem, 1.3vw, 1.35rem);
   line-height: 1.7;
   color: rgba(255, 255, 255, 0.78);
 }
@@ -1552,6 +1622,11 @@ a {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
+}
+
+.hero .hero-actions .btn {
+  font-size: clamp(1.05rem, 1.2vw, 1.15rem);
+  padding: 16px 26px;
 }
 
 .btn {
@@ -1615,6 +1690,76 @@ a {
     radial-gradient(260px 220px at 72% 72%, rgba(138, 92, 255, 0.18), transparent 68%);
   filter: blur(10px);
   opacity: 0.9;
+}
+
+.hero-visual-card {
+  position: relative;
+  height: 100%;
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(500px 260px at 24% 22%, rgba(255, 79, 216, 0.18), transparent 60%),
+    radial-gradient(420px 260px at 76% 72%, rgba(138, 92, 255, 0.16), transparent 62%),
+    rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  padding: 22px 22px 20px;
+  overflow: hidden;
+}
+
+.hero-visual-kicker {
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 1.05rem;
+}
+
+.hero-visual-title {
+  margin-top: 10px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  font-size: 1.45rem;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.hero-visual-mock {
+  margin-top: 16px;
+  padding: 14px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.hero-visual-chip {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 900;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.hero-visual-bars {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.hero-visual-bars span {
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .hero-image {
@@ -1842,6 +1987,15 @@ a {
   padding: 16px 16px 14px;
 }
 
+/* Realtime board */
+.rb-board-card {
+  padding: 18px;
+}
+
+.rb-board-card .panel-head {
+  margin-top: 0;
+}
+
 .post-head {
   margin-bottom: 10px;
 }
@@ -1870,6 +2024,74 @@ a {
   font-size: 1.06rem;
   color: rgba(255, 255, 255, 0.86);
   white-space: pre-wrap;
+}
+
+.answer-box {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.answer-head {
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.answer-body {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.post-actions {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.post-actions-left,
+.post-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reaction-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.reaction-btn {
+  border-color: rgba(255, 255, 255, 0.20);
+  padding: 10px 12px;
+  gap: 10px;
+}
+
+.reaction-emoji {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.reaction-count {
+  display: inline-block;
+  min-width: 3ch;
+  text-align: center;
+  font-weight: 900;
 }
 
 .post-image {

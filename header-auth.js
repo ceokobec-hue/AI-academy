@@ -140,7 +140,8 @@ function wireHeaderAuth() {
   const authUI = ensureAuthUIContainer({ signupLink, loginLink });
 
   onAuthStateChanged(auth, async (user) => {
-    if (!user) {
+    // 익명 로그인(예: 실시간 게시판)은 "로그인 상태"로 UI를 바꾸지 않음
+    if (!user || user.isAnonymous) {
       upsertAdminLink(null);
       renderLoggedOut({ loginLink, signupLink, authUI });
       return;

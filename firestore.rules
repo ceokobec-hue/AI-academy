@@ -1,0 +1,166 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn()
+        && (
+          request.auth.token.admin == true
+          || request.auth.token.email == "mentor0329@hanmail.net"
+        );
+    }
+    function isOwner() { return signedIn() && resource.data.author.uid == request.auth.uid; }
+    function changedKeysOnly(keys) {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(keys);
+    }
+    function isReactionKeyAllowed(reactionKey) {
+      return reactionKey in ["thumb", "heart", "fire", "party", "clap", "spark"];
+    }
+    function roomIsOpen(roomId) {
+      return get(/databases/$(database)/documents/realtimeRooms/$(roomId)).data.isOpen == true;
+    }
+
+    // 커뮤니티는 읽기 공개
+    match /missions/{missionId} {
+      allow read: if true;
+      // 운영 권장: 관리자만 write
+      allow write: if isAdmin();
+    }
+
+    // 유저 본인 문서 + 하위 문서 접근 허용 (로그인/헤더 표시용)
+    match /users/{userId}/{document=**} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    // 강의/카테고리: 카탈로그는 공개 read, 관리는 관리자 write
+    match /courses/{courseId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 메인 일정(캘린더): read 공개, write 관리자만
+    match /scheduleRules/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /scheduleEvents/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+
+      // 작성(로그인 필요 + author.uid 본인 강제)
+      allow create: if signedIn()
+        && request.resource.data.author.uid == request.auth.uid
+        && request.resource.data.type in ["question", "mission"];
+
+      // 삭제는 필요 시만 열기
+      allow delete: if false;
+
+      // 업데이트 분기
+      allow update: if
+        (
+          // A) 관리자: 답변(adminAnswer) + 해결처리(status=solved)만
+          isAdmin()
+          && resource.data.type == "question"
+          && changedKeysOnly(["adminAnswer", "status", "updatedAt"])
+          && request.resource.data.status == "solved"
+          && request.resource.data.adminAnswer.body is string
+        )
+        ||
+        (
+          // B) 작성자: 질문(title/body/tags)만
+          isOwner()
+          && resource.data.type == "question"
+          && changedKeysOnly(["title", "body", "tags", "updatedAt"])
+          // author/type은 변경 불가
+          && request.resource.data.author == resource.data.author
+          && request.resource.data.type == resource.data.type
+        )
+        ||
+        (
+          // C) 작성자: 미션 인증 이미지 업로드 후 imageUrl만 업데이트 허용
+          isOwner()
+          && resource.data.type == "mission"
+          && changedKeysOnly(["imageUrl", "updatedAt"])
+          && request.resource.data.author == resource.data.author
+          && request.resource.data.type == resource.data.type
+        );
+
+      // 리액션(긍정) - 유저별 카운트 저장
+      match /reactions/{reactionKey}/users/{uid} {
+        allow read: if true;
+
+        // 최초 1회(일반 유저 포함): count=1로 생성
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && isReactionKeyAllowed(reactionKey)
+          && request.resource.data.count == 1;
+
+        // 관리자만 여러 번(+1씩) 허용
+        allow update: if isAdmin()
+          && request.auth.uid == uid
+          && isReactionKeyAllowed(reactionKey)
+          && request.resource.data.count == resource.data.count + 1;
+
+        // delete는 막는 편이 안전
+        allow delete: if false;
+      }
+    }
+
+    // 실시간 게시판(방: roomId, date는 필드)
+    match /realtimeRooms/{roomId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+
+      match /posts/{postId} {
+        allow read: if true;
+
+        // 제출(교육생): 방이 열려있을 때만 + author.uid 본인 강제
+        allow create: if signedIn()
+          && request.resource.data.type == "submit"
+          && roomIsOpen(roomId)
+          && request.resource.data.author.uid == request.auth.uid;
+
+        // 공지/미션(관리자): 언제든지
+        allow create: if isAdmin()
+          && request.resource.data.type == "mission";
+
+        // 수정(교육생): 본인 제출만, title/body/nickname/imageUrl/updatedAt만
+        allow update: if
+          (
+            signedIn()
+            && resource.data.type == "submit"
+            && resource.data.author.uid == request.auth.uid
+            && changedKeysOnly(["title", "body", "nickname", "imageUrl", "updatedAt"])
+            && request.resource.data.author == resource.data.author
+            && request.resource.data.type == resource.data.type
+          )
+          ||
+          (
+            // 관리자: 관리 목적으로 전체 수정 허용(필요 최소 키만)
+            isAdmin()
+            && changedKeysOnly(["title", "body", "nickname", "imageUrl", "updatedAt", "isHidden"])
+          );
+
+        // 삭제(교육생): 본인 제출만 / 관리자도 가능
+        allow delete: if
+          (isAdmin())
+          || (
+            signedIn()
+            && resource.data.type == "submit"
+            && resource.data.author.uid == request.auth.uid
+          );
+      }
+    }
+  }
+}
+

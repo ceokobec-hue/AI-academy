@@ -36,6 +36,7 @@
           <a class="nav-link" href="./course.html">강의수강</a>
           <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
           <a class="nav-link is-active" href="./community.html" aria-current="page">커뮤니티</a>
+          <a class="nav-link" href="./realtimeboard.html">실시간 게시판</a>
           <a class="nav-link" data-auth-link="login" href="./login.html">로그인</a>
           <a class="nav-link" data-auth-link="signup" href="./signup.html">회원가입</a>
         </nav>
@@ -143,6 +144,28 @@
         </div>
 
         <p id="postMsg" class="form-msg" role="status" aria-live="polite"></p>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="answerModal" aria-label="관리자 답변">
+      <form class="modal-card modal-wide" id="answerForm" method="dialog">
+        <div class="modal-head">
+          <p class="modal-title">관리자 답변</p>
+          <button class="icon-btn" type="button" id="answerClose" aria-label="닫기">×</button>
+        </div>
+
+        <div class="field">
+          <label class="label" for="answerBody">답변 내용</label>
+          <textarea class="textarea" id="answerBody" rows="7" required></textarea>
+          <p class="hint" style="margin: 8px 0 0">답변을 저장하면 질문이 “해결됨”으로 표시됩니다.</p>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" type="submit">저장</button>
+          <button class="btn btn-ghost" type="button" id="answerCancel">취소</button>
+        </div>
+
+        <p id="answerMsg" class="form-msg" role="status" aria-live="polite"></p>
       </form>
     </dialog>
 

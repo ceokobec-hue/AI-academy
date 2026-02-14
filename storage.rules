@@ -1,0 +1,23 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+
+    // 기본: 읽기는 공개(교육생끼리 서로 보기)
+    match /{allPaths=**} {
+      allow read: if true;
+    }
+
+    // 업로드 허용 경로들(로그인만 하면 가능, 익명 로그인도 포함)
+    match /community/{allPaths=**} {
+      allow write: if signedIn();
+    }
+    match /courses/{allPaths=**} {
+      allow write: if signedIn();
+    }
+    match /realtimeboards/{allPaths=**} {
+      allow write: if signedIn();
+    }
+  }
+}
+
