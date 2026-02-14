@@ -15,6 +15,10 @@ import {
   serverTimestamp,
   setDoc,
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+import {
+  getFunctions,
+  httpsCallable,
+} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-functions.js";
 
 import { firebaseConfig } from "./firebase-config.js";
 import { formatKrw, getCourseById } from "./courses-data.js";
@@ -35,7 +39,8 @@ function ensureFirebase() {
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  return { auth, db };
+  const functions = getFunctions(app, "asia-northeast3");
+  return { auth, db, functions };
 }
 
 function qs() {
@@ -76,26 +81,61 @@ function renderHeader(course, { enrolled, inviteUnlocked }) {
   `;
 }
 
+// 구독 고정 가격(전체 강의 오픈)
+const SUB_MONTHLY = 99000;
+const SUB_YEARLY = 890000;
+
+function pricingRow(label, price, { tag, recommended } = {}) {
+  const tagHtml = tag ? `<span class="plan-tag">${esc(tag)}</span>` : "";
+  const recClass = recommended ? " plan-row--rec" : "";
+  return `
+    <div class="plan-row${recClass}">
+      <div class="plan-label">${tagHtml}${esc(label)}</div>
+      <div class="plan-price">${price > 0 ? formatKrw(price) : "-"}</div>
+    </div>
+  `;
+}
+
 function renderMeta(course, { enrolled, inviteUnlocked }) {
   const el = $("courseMeta");
   if (!el) return;
 
+  if (enrolled) {
+    el.innerHTML = `
+      <div class="side-meta-item"><span>상태</span><span>${inviteUnlocked ? "무료 오픈" : "수강 중"}</span></div>
+      <div class="side-meta-item"><span>수강기간</span><span>${course.durationDays}일</span></div>
+      <div class="side-meta-item"><span>개강일</span><span>${course.startDate}</span></div>
+    `;
+    return;
+  }
+
+  const p = course.pricing || {};
   el.innerHTML = `
-    <div class="side-meta-item"><span>가격</span><span>${
-      enrolled ? (inviteUnlocked ? "무료 오픈" : "수강 중") : formatKrw(course.priceKrw)
-    }</span></div>
-    <div class="side-meta-item"><span>수강기간</span><span>${course.durationDays}일</span></div>
-    <div class="side-meta-item"><span>개강일</span><span>${course.startDate}</span></div>
+    <div class="pricing-table">
+      <h4 class="pricing-title">단품(이 강의만)</h4>
+      ${pricingRow("30일", p.single30)}
+      ${pricingRow("90일", p.single90, { recommended: true, tag: "추천" })}
+      <h4 class="pricing-title" style="margin-top:14px;">카테고리(이 분야 전체)</h4>
+      ${pricingRow("30일", p.category30)}
+      ${pricingRow("90일", p.category90, { recommended: true, tag: "추천" })}
+      <h4 class="pricing-title" style="margin-top:14px;">구독(전체 강의 오픈)</h4>
+      ${pricingRow("월 구독", SUB_MONTHLY)}
+      ${pricingRow("연 구독", SUB_YEARLY, { tag: "최저가" })}
+    </div>
+    <div class="side-meta" style="margin-top:12px;">
+      <div class="side-meta-item"><span>수강기간</span><span>${course.durationDays}일</span></div>
+      <div class="side-meta-item"><span>개강일</span><span>${course.startDate}</span></div>
+    </div>
   `;
 }
 
-function renderCTA({ course, user, enrolled, inviteUnlocked, onEnroll }) {
+function renderCTA({ course, user, enrolled, inviteUnlocked, functions }) {
   const el = $("courseCTA");
   if (!el) return;
 
   if (!user) {
     el.innerHTML = `
-      <a class="btn btn-primary" href="./login.html">로그인 후 수강 신청</a>
+      <a class="btn btn-primary" href="./login.html">로그인 후 결제</a>
       <a class="btn btn-ghost" href="./signup.html">회원가입</a>
     `;
     return;
@@ -109,12 +149,47 @@ function renderCTA({ course, user, enrolled, inviteUnlocked, onEnroll }) {
     return;
   }
 
+  const p = course.pricing || {};
+
   el.innerHTML = `
-    <button class="btn btn-primary" type="button" id="btnEnrollTest">수강 신청(테스트)</button>
-    <a class="btn btn-ghost" href="./course.html">다른 강의 보기</a>
+    <div class="plan-buttons">
+      <button class="btn btn-ghost btn-sm" type="button" data-plan="single30" data-price="${p.single30}">단품 30일 · ${formatKrw(p.single30)}</button>
+      <button class="btn btn-primary btn-sm" type="button" data-plan="single90" data-price="${p.single90}">단품 90일 · ${formatKrw(p.single90)}<span class="plan-rec-badge">추천</span></button>
+      ${p.category30 ? `<button class="btn btn-ghost btn-sm" type="button" data-plan="category30" data-price="${p.category30}">카테고리 30일 · ${formatKrw(p.category30)}</button>` : ""}
+      ${p.category90 ? `<button class="btn btn-primary btn-sm" type="button" data-plan="category90" data-price="${p.category90}">카테고리 90일 · ${formatKrw(p.category90)}<span class="plan-rec-badge">추천</span></button>` : ""}
+      <button class="btn btn-ghost btn-sm" type="button" data-plan="sub_monthly" data-price="${SUB_MONTHLY}">월 구독 · ${formatKrw(SUB_MONTHLY)}</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-plan="sub_yearly" data-price="${SUB_YEARLY}">연 구독 · ${formatKrw(SUB_YEARLY)}<span class="plan-rec-badge">최저가</span></button>
+    </div>
+    <p class="hint" style="margin-top:10px;">결제 후 바로 수강이 시작됩니다.</p>
   `;
 
-  document.getElementById("btnEnrollTest")?.addEventListener("click", onEnroll);
+  el.addEventListener("click", async (e) => {
+    const btn = e.target?.closest?.("button[data-plan]");
+    if (!btn) return;
+    const plan = btn.dataset.plan;
+
+    // 버튼 비활성화 (중복 클릭 방지)
+    const allBtns = el.querySelectorAll("button[data-plan]");
+    allBtns.forEach((b) => { b.disabled = true; });
+    btn.textContent = "결제 준비 중…";
+
+    try {
+      const createCheckout = httpsCallable(functions, "createCheckoutSession");
+      const result = await createCheckout({ plan, courseId: course.id });
+      const url = result.data?.url;
+      if (url) {
+        window.location.href = url; // Stripe Checkout 페이지로 이동
+      } else {
+        throw new Error("결제 URL을 받지 못했습니다.");
+      }
+    } catch (err) {
+      console.error("Checkout error:", err);
+      alert(`결제 세션 생성에 실패했습니다.\n${err.message || err}`);
+      allBtns.forEach((b) => { b.disabled = false; });
+      // 버튼 텍스트 원복은 re-render가 낫지만, 간단 처리
+      btn.textContent = `${plan} · ${formatKrw(Number(btn.dataset.price || 0))}`;
+    }
+  });
 }
 
 function renderVideo({ course, user, enrolled }) {
@@ -274,6 +349,7 @@ async function fetchCourseFromFirestore(db, id) {
 
 function normalizeCourse(c, idFallback) {
   if (!c) return null;
+  const p = c.pricing || {};
   return {
     id: String(c.id || idFallback || ""),
     title: String(c.title || ""),
@@ -291,6 +367,12 @@ function normalizeCourse(c, idFallback) {
     content: c.content || { overview: "", bullets: [] },
     resources: Array.isArray(c.resources) ? c.resources : [],
     files: Array.isArray(c.files) ? c.files : [],
+    pricing: {
+      single30: Number(p.single30 || c.priceKrw || 0),
+      single90: Number(p.single90 || 0),
+      category30: Number(p.category30 || 0),
+      category90: Number(p.category90 || 0),
+    },
   };
 }
 
@@ -513,13 +595,27 @@ async function boot() {
   // Default (logged out)
   renderHeader(course, { enrolled: false, inviteUnlocked: false });
   renderMeta(course, { enrolled: false, inviteUnlocked: false });
-  renderCTA({ course, user: null, enrolled: false, inviteUnlocked: false, onEnroll: () => {} });
+  renderCTA({ course, user: null, enrolled: false, inviteUnlocked: false, functions: null });
   currentUser = null;
   currentEnrolled = false;
   renderAll();
 
   if (!fb) return;
-  const { auth, db } = fb;
+  const { auth, db, functions } = fb;
+
+  // 결제 성공/취소 URL 파라미터 처리
+  const paymentStatus = qs().get("payment");
+  if (paymentStatus === "success") {
+    try { window.showToast({ title: "결제 완료", message: "결제가 완료되었습니다! 수강이 시작됩니다." }); } catch { /* ignore */ }
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("payment");
+    window.history.replaceState({}, "", cleanUrl.toString());
+  } else if (paymentStatus === "cancel") {
+    try { window.showToast({ title: "결제 취소", message: "결제가 취소되었습니다." }); } catch { /* ignore */ }
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("payment");
+    window.history.replaceState({}, "", cleanUrl.toString());
+  }
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -527,7 +623,7 @@ async function boot() {
       currentEnrolled = false;
       renderHeader(course, { enrolled: false, inviteUnlocked: false });
       renderMeta(course, { enrolled: false, inviteUnlocked: false });
-      renderCTA({ course, user: null, enrolled: false, inviteUnlocked: false, onEnroll: () => {} });
+      renderCTA({ course, user: null, enrolled: false, inviteUnlocked: false, functions: null });
       renderAll();
       return;
     }
@@ -543,42 +639,29 @@ async function boot() {
     const inviteUnlocked = !enrolledDoc && inviteVerified && !!course.inviteFreeOpen;
     const enrolled = enrolledDoc || inviteUnlocked;
 
-    const refresh = async () => {
-      let enrolledDoc2 = false;
-      try {
-        enrolledDoc2 = await checkEnrolled({ uid: user.uid, courseId: course.id, db });
-      } catch {
-        enrolledDoc2 = false;
+    // 구독 상태 확인
+    let subscriptionActive = false;
+    try {
+      const userSnap = await getDoc(doc(db, "users", user.uid));
+      if (userSnap.exists()) {
+        subscriptionActive = !!userSnap.data()?.entitlements?.subscriptionActive;
       }
-      const inviteVerified2 = await getInviteVerified({ uid: user.uid, db });
-      const inviteUnlocked2 = !enrolledDoc2 && inviteVerified2 && !!course.inviteFreeOpen;
-      const enrolled2 = enrolledDoc2 || inviteUnlocked2;
+    } catch { /* ignore */ }
 
-      currentUser = user;
-      currentEnrolled = enrolled2;
-      renderHeader(course, { enrolled: enrolled2, inviteUnlocked: inviteUnlocked2 });
-      renderMeta(course, { enrolled: enrolled2, inviteUnlocked: inviteUnlocked2 });
-      renderCTA({
-        course,
-        user,
-        enrolled: enrolled2,
-        inviteUnlocked: inviteUnlocked2,
-        onEnroll: async () => {
-          try {
-            await enrollTest({ uid: user.uid, course, db });
-          } catch (e) {
-            console.error(e);
-            alert("수강 신청에 실패했습니다. Firestore 규칙/권한을 확인해 주세요.");
-            return;
-          }
-          await refresh();
-          document.getElementById("courseVideo")?.scrollIntoView({ behavior: "smooth" });
-        },
-      });
-      renderAll();
-    };
+    const finalEnrolled = enrolled || subscriptionActive;
 
-    await refresh();
+    currentUser = user;
+    currentEnrolled = finalEnrolled;
+    renderHeader(course, { enrolled: finalEnrolled, inviteUnlocked });
+    renderMeta(course, { enrolled: finalEnrolled, inviteUnlocked });
+    renderCTA({
+      course,
+      user,
+      enrolled: finalEnrolled,
+      inviteUnlocked,
+      functions,
+    });
+    renderAll();
   });
 }
 

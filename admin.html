@@ -99,20 +99,49 @@
 
                 <div class="grid2">
                   <div class="field">
-                    <label class="label" for="priceKrw">가격(원)</label>
+                    <label class="label" for="priceKrw">단품 30일 가격(원)</label>
                     <input class="input" id="priceKrw" name="priceKrw" type="number" min="0" step="100" required />
+                    <p class="hint">단품 90일은 자동 계산됩니다. (×2.2, 9,900 끝자리)</p>
                   </div>
                   <div class="field">
-                    <label class="label" for="durationDays">수강기간(일)</label>
-                    <input class="input" id="durationDays" name="durationDays" type="number" min="1" step="1" required />
+                    <label class="label" for="priceKrw90">단품 90일 가격(자동)</label>
+                    <input class="input" id="priceKrw90" name="priceKrw90" type="number" readonly />
+                    <p class="hint hint-spacer" aria-hidden="true">정렬용</p>
                   </div>
                 </div>
 
                 <div class="grid2">
                   <div class="field">
+                    <label class="label" for="catPrice30">카테고리 30일 가격(원)</label>
+                    <input class="input" id="catPrice30" name="catPrice30" type="number" min="0" step="100" required />
+                    <p class="hint">카테고리 90일은 자동 계산됩니다. (×2.0, 9,900 끝자리)</p>
+                  </div>
+                  <div class="field">
+                    <label class="label" for="catPrice90">카테고리 90일 가격(자동)</label>
+                    <input class="input" id="catPrice90" name="catPrice90" type="number" readonly />
+                    <div class="checks" style="margin-top: 10px;">
+                      <label class="check"
+                        ><input type="checkbox" id="saveCategoryPricingDefaults" name="saveCategoryPricingDefaults" checked />
+                        <span>이 카테고리 기본 가격으로 저장</span></label
+                      >
+                    </div>
+                    <p class="hint">다음 업로드부터 카테고리 가격이 자동으로 채워집니다.</p>
+                  </div>
+                </div>
+
+                <div class="grid2">
+                  <div class="field">
+                    <label class="label" for="durationDays">수강기간(일)</label>
+                    <input class="input" id="durationDays" name="durationDays" type="number" min="1" step="1" required />
+                  </div>
+                  <div class="field">
                     <label class="label" for="startDate">개강일</label>
                     <input class="input" id="startDate" name="startDate" type="date" required />
+                    <p class="hint hint-spacer" aria-hidden="true">정렬용</p>
                   </div>
+                </div>
+
+                <div class="grid2">
                   <div class="field">
                     <span class="label">표시 옵션</span>
                     <div class="checks">

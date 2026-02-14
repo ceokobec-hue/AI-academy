@@ -236,13 +236,26 @@ function wireCategoryNav() {
     nav.querySelectorAll(".category-chip").forEach((b) => b.classList.remove("is-active"));
     btn.classList.add("is-active");
 
+    const sections = Array.from(document.querySelectorAll(".category-section"));
+    const featuredGrid = document.querySelector(".featured-grid");
+
     if (target === "top") {
+      // 전체: 전부 다시 보이기
+      sections.forEach((s) => (s.style.display = ""));
+      if (featuredGrid) featuredGrid.style.display = "";
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
     const el = document.getElementById(target);
     if (!el) return;
+
+    // 특정 카테고리: 해당 섹션만 보이게
+    sections.forEach((s) => (s.style.display = s.id === target ? "" : "none"));
+    // 신규/인기 featured는 필터 시 숨김(카테고리만 보이게)
+    if (featuredGrid) featuredGrid.style.display = "none";
+
+    // 필터 후 해당 섹션으로 이동
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }

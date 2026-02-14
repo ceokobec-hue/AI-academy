@@ -78,6 +78,21 @@ function extFromName(name) {
   return name.slice(idx).toLowerCase();
 }
 
+function roundToMarketing9900(price) {
+  const n = Number(price || 0);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  // 9,900 / 19,900 / 29,900 ... 형태로 맞추기
+  // ex) 59000 -> 59900, 129000 -> 129900
+  const unit = 10000;
+  const rounded = Math.ceil(n / unit) * unit - 100;
+  return Math.max(9900, rounded);
+}
+
+function calc90From30(price30, ratio) {
+  const base = Number(price30 || 0) * Number(ratio || 0);
+  return roundToMarketing9900(base);
+}
+
 function uploadFile({ storage, path, file, onProgress }) {
   const storageRef = ref(storage, path);
   const task = uploadBytesResumable(storageRef, file);
@@ -170,6 +185,11 @@ async function boot() {
   const msgEl = $("adminMsg");
   const resultEl = $("adminResult");
   const categorySelect = $("categoryId");
+  const price30El = $("priceKrw");
+  const price90El = $("priceKrw90");
+  const cat30El = $("catPrice30");
+  const cat90El = $("catPrice90");
+  const saveCatDefaultsEl = $("saveCategoryPricingDefaults");
 
   if (!fb) {
     setWarn("Firebase 설정이 없거나 storageBucket이 비어있습니다. firebase-config.js를 확인해 주세요.");
@@ -181,6 +201,61 @@ async function boot() {
   const { auth, db, storage } = fb;
   const categories = await fetchCategories(db);
   fillCategorySelect(categorySelect, categories);
+
+  async function applyCategoryPricingDefaultsIfNeeded() {
+    const categoryId = String(categorySelect?.value || "").trim();
+    if (!categoryId) return;
+    if (!cat30El || !cat90El) return;
+
+    // 사용자가 직접 입력했으면 자동 덮어쓰지 않음
+    const touched = cat30El.dataset.touched === "true";
+    const current = Number(cat30El.value || 0);
+    if (touched && current > 0) return;
+
+    try {
+      const snap = await getDoc(doc(db, "categories", categoryId));
+      if (!snap.exists()) return;
+      const data = snap.data() || {};
+      const defaults = data.pricingDefaults || {};
+      const d30 = Number(defaults.category30 || 0);
+      if (d30 > 0) {
+        cat30El.value = String(d30);
+        cat90El.value = String(Number(defaults.category90 || 0) || calc90From30(d30, 2.0));
+      } else if (!cat90El.value) {
+        cat90El.value = String(calc90From30(Number(cat30El.value || 0), 2.0));
+      }
+    } catch (e) {
+      console.warn("Failed to load category pricing defaults.", e);
+    }
+  }
+
+  function wirePricingCalculator() {
+    if (price30El && price90El) {
+      price30El.addEventListener("input", () => {
+        const v = Number(price30El.value || 0);
+        price90El.value = v > 0 ? String(calc90From30(v, 2.2)) : "";
+      });
+      // initial fill
+      const v0 = Number(price30El.value || 0);
+      if (v0 > 0 && !price90El.value) price90El.value = String(calc90From30(v0, 2.2));
+    }
+
+    if (cat30El && cat90El) {
+      cat30El.addEventListener("input", () => {
+        cat30El.dataset.touched = "true";
+        const v = Number(cat30El.value || 0);
+        cat90El.value = v > 0 ? String(calc90From30(v, 2.0)) : "";
+      });
+      const v0 = Number(cat30El.value || 0);
+      if (v0 > 0 && !cat90El.value) cat90El.value = String(calc90From30(v0, 2.0));
+    }
+
+    categorySelect?.addEventListener("change", async () => {
+      // 카테고리 바뀌면 기본가격 자동 채움(비어있을 때)
+      if (cat30El) cat30El.dataset.touched = "";
+      await applyCategoryPricingDefaultsIfNeeded();
+    });
+  }
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -218,7 +293,12 @@ async function boot() {
           $("courseId").value = course.id || editId;
           $("title").value = course.title || "";
           $("shortDescription").value = course.shortDescription || "";
-          $("priceKrw").value = course.priceKrw ?? "";
+          $("priceKrw").value = course.pricing?.single30 ?? course.priceKrw ?? "";
+          if (price90El) {
+            price90El.value = String(
+              Number(course.pricing?.single90 || 0) || calc90From30(Number($("priceKrw").value || 0), 2.2) || "",
+            );
+          }
           $("durationDays").value = course.durationDays ?? "";
           $("startDate").value = course.startDate || "";
           $("categoryId").value = course.categoryId || categories[0]?.id || "";
@@ -226,6 +306,11 @@ async function boot() {
           form.querySelector('input[name="isPopular"]').checked = !!course.isPopular;
           form.querySelector('input[name="published"]').checked = course.published !== false;
           form.querySelector('input[name="inviteFreeOpen"]').checked = !!course.inviteFreeOpen;
+          if (cat30El) cat30El.value = course.pricing?.category30 ?? "";
+          if (cat90El) {
+            const c30 = Number(cat30El?.value || 0);
+            cat90El.value = String(Number(course.pricing?.category90 || 0) || (c30 ? calc90From30(c30, 2.0) : "") || "");
+          }
           $("overview").value = course.content?.overview || "";
           $("bullets").value = (course.content?.bullets || []).join("\n");
           const r0 = (course.resources || [])[0] || {};
@@ -242,6 +327,9 @@ async function boot() {
       }
     }
 
+    wirePricingCalculator();
+    await applyCategoryPricingDefaultsIfNeeded();
+
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       setStatus(msgEl, "", "info");
@@ -251,7 +339,10 @@ async function boot() {
       const courseIdInput = String(fd.get("courseId") || "").trim();
       const title = String(fd.get("title") || "").trim();
       const shortDescription = String(fd.get("shortDescription") || "").trim();
-      const priceKrw = Number(fd.get("priceKrw") || 0);
+      const price30 = Number(fd.get("priceKrw") || 0);
+      const price90 = calc90From30(price30, 2.2);
+      const catPrice30 = Number(fd.get("catPrice30") || 0);
+      const catPrice90 = calc90From30(catPrice30, 2.0);
       const durationDays = Number(fd.get("durationDays") || 0);
       const startDate = String(fd.get("startDate") || "");
       const categoryId = String(fd.get("categoryId") || "").trim();
@@ -259,6 +350,7 @@ async function boot() {
       const isPopular = !!fd.get("isPopular");
       const published = !!fd.get("published");
       const inviteFreeOpen = !!fd.get("inviteFreeOpen");
+      const saveCategoryPricingDefaults = !!fd.get("saveCategoryPricingDefaults");
 
       if (!title || !shortDescription || !categoryId || !startDate || !durationDays) {
         setStatus(msgEl, "필수 항목(제목/설명/카테고리/개강일/기간)을 입력해 주세요.", "error");
@@ -346,7 +438,8 @@ async function boot() {
         const payload = {
           title,
           shortDescription,
-          priceKrw: Number.isFinite(priceKrw) ? priceKrw : 0,
+          // 기존 UI/카탈로그 호환: priceKrw는 "단품 30일" 가격으로 유지
+          priceKrw: Number.isFinite(price30) ? price30 : 0,
           durationDays: Number.isFinite(durationDays) ? durationDays : 0,
           startDate,
           categoryId,
@@ -354,6 +447,14 @@ async function boot() {
           isPopular,
           published,
           inviteFreeOpen,
+          pricing: {
+            single30: Number.isFinite(price30) ? price30 : 0,
+            single90: Number.isFinite(price90) ? price90 : 0,
+            category30: Number.isFinite(catPrice30) ? catPrice30 : 0,
+            category90: Number.isFinite(catPrice90) ? catPrice90 : 0,
+            ratios: { single90From30: 2.2, category90From30: 2.0 },
+            rounding: "ceil_10000_minus_100",
+          },
           thumbnailUrl: thumbnailUrl || existing.thumbnailUrl || "",
           video: {
             src: videoSrc || existing.video?.src || "",
@@ -371,6 +472,22 @@ async function boot() {
         if (!existingSnap.exists()) payload.createdAt = serverTimestamp();
 
         await setDoc(courseRef, payload, { merge: true });
+
+        // 카테고리 기본 가격 업데이트(선택)
+        if (saveCategoryPricingDefaults && categoryId) {
+          await setDoc(
+            doc(db, "categories", categoryId),
+            {
+              pricingDefaults: {
+                category30: Number.isFinite(catPrice30) ? catPrice30 : 0,
+                category90: Number.isFinite(catPrice90) ? catPrice90 : 0,
+                updatedAt: serverTimestamp(),
+              },
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
 
         setStatus(msgEl, `저장 완료! courseId = ${courseId}`, "success");
         resultEl.innerHTML = `

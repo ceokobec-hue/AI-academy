@@ -1,10 +1,17 @@
 const admin = require("firebase-admin");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 
 admin.initializeApp();
 
 const REGION = "asia-northeast3";
+
+// Stripe 시크릿 키를 Firebase Secret Manager에 저장합니다.
+// 배포 전에: firebase functions:secrets:set STRIPE_SECRET_KEY
+// 배포 전에: firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
+const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
+const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 function normalizeCode(raw) {
   return String(raw || "")
@@ -197,4 +204,280 @@ exports.redeemInviteCode = onCall({ region: REGION }, async (req) => {
 
   return result;
 });
+
+// ─── Stripe 결제 ──────────────────────────────────────────────
+
+// 구독 고정 가격(원)
+const SUB_MONTHLY = 99000;
+const SUB_YEARLY = 890000;
+
+/**
+ * createCheckoutSession (callable)
+ * 클라이언트에서 { plan, courseId } 를 보내면
+ * Stripe Checkout Session URL을 만들어 돌려줍니다.
+ *
+ * plan 종류: "single30" | "single90" | "category30" | "category90" | "sub_monthly" | "sub_yearly"
+ */
+exports.createCheckoutSession = onCall(
+  { region: REGION, secrets: [stripeSecretKey] },
+  async (req) => {
+    if (!req.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    if (req.auth.token?.firebase?.sign_in_provider === "anonymous") {
+      throw new HttpsError("failed-precondition", "익명 로그인으로는 결제할 수 없습니다.");
+    }
+
+    const uid = req.auth.uid;
+    const { plan, courseId } = req.data || {};
+    if (!plan) throw new HttpsError("invalid-argument", "plan이 필요합니다.");
+
+    const db = admin.firestore();
+    const stripe = require("stripe")(stripeSecretKey.value());
+
+    let amount = 0;
+    let description = "";
+    let mode = "payment"; // one-time 결제
+    let priceId = null; // 구독은 Stripe Price ID 사용
+    let durationDays = 30;
+    let planType = plan; // 메타데이터에 저장
+    let targetCourseId = courseId || "";
+    let targetCategoryId = "";
+
+    if (plan.startsWith("single") || plan.startsWith("category")) {
+      // 단품/카테고리: 강의 문서에서 pricing 읽기
+      if (!courseId) throw new HttpsError("invalid-argument", "courseId가 필요합니다.");
+      const courseSnap = await db.doc(`courses/${courseId}`).get();
+      if (!courseSnap.exists) throw new HttpsError("not-found", "강의를 찾을 수 없습니다.");
+      const course = courseSnap.data();
+      const pricing = course.pricing || {};
+
+      if (plan === "single30") {
+        amount = Number(pricing.single30 || course.priceKrw || 0);
+        durationDays = 30;
+        description = `[단품 30일] ${course.title || courseId}`;
+      } else if (plan === "single90") {
+        amount = Number(pricing.single90 || 0);
+        durationDays = 90;
+        description = `[단품 90일] ${course.title || courseId}`;
+      } else if (plan === "category30") {
+        amount = Number(pricing.category30 || 0);
+        durationDays = 30;
+        targetCategoryId = course.categoryId || "";
+        description = `[카테고리 30일] ${course.categoryId || "전체"}`;
+      } else if (plan === "category90") {
+        amount = Number(pricing.category90 || 0);
+        durationDays = 90;
+        targetCategoryId = course.categoryId || "";
+        description = `[카테고리 90일] ${course.categoryId || "전체"}`;
+      }
+
+      if (!amount || amount <= 0) throw new HttpsError("failed-precondition", "가격이 설정되지 않았습니다.");
+    } else if (plan === "sub_monthly") {
+      amount = SUB_MONTHLY;
+      description = "월 구독 (전체 강의)";
+      mode = "subscription";
+    } else if (plan === "sub_yearly") {
+      amount = SUB_YEARLY;
+      description = "연 구독 (전체 강의)";
+      mode = "subscription";
+    } else {
+      throw new HttpsError("invalid-argument", "알 수 없는 plan입니다.");
+    }
+
+    // Stripe Checkout Session 파라미터 생성
+    const baseUrl = req.rawRequest?.headers?.origin || "https://aiacademy-36b79.web.app";
+    const successUrl = `${baseUrl}/lesson.html?id=${targetCourseId}&payment=success`;
+    const cancelUrl = `${baseUrl}/lesson.html?id=${targetCourseId}&payment=cancel`;
+
+    const metadata = {
+      uid,
+      plan: planType,
+      courseId: targetCourseId,
+      categoryId: targetCategoryId,
+      durationDays: String(durationDays),
+    };
+
+    let sessionParams;
+    if (mode === "subscription") {
+      // 구독: Stripe Price를 동적 생성(ad-hoc price)
+      sessionParams = {
+        mode: "subscription",
+        customer_email: req.auth.token?.email || undefined,
+        line_items: [
+          {
+            price_data: {
+              currency: "krw",
+              product_data: { name: description },
+              unit_amount: amount, // KRW는 소수점 없음
+              recurring: {
+                interval: plan === "sub_yearly" ? "year" : "month",
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        subscription_data: { metadata },
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata,
+      };
+    } else {
+      // 단건 결제
+      sessionParams = {
+        mode: "payment",
+        customer_email: req.auth.token?.email || undefined,
+        line_items: [
+          {
+            price_data: {
+              currency: "krw",
+              product_data: { name: description },
+              unit_amount: amount,
+            },
+            quantity: 1,
+          },
+        ],
+        payment_intent_data: { metadata },
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata,
+      };
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+
+    return { url: session.url };
+  },
+);
+
+/**
+ * stripeWebhook (HTTP endpoint)
+ * Stripe에서 결제 완료(checkout.session.completed) 이벤트를 보내면
+ * users/{uid}/enrollments/{courseId} 문서를 생성해 수강 권한을 부여합니다.
+ */
+exports.stripeWebhook = onRequest(
+  {
+    region: REGION,
+    secrets: [stripeSecretKey, stripeWebhookSecret],
+    // Stripe webhook은 raw body가 필요
+    invoker: "public",
+  },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
+      return;
+    }
+
+    const stripe = require("stripe")(stripeSecretKey.value());
+    const sig = req.headers["stripe-signature"];
+
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.rawBody,
+        sig,
+        stripeWebhookSecret.value(),
+      );
+    } catch (err) {
+      console.error("Webhook signature verification failed.", err.message);
+      res.status(400).send(`Webhook Error: ${err.message}`);
+      return;
+    }
+
+    const db = admin.firestore();
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      const meta = session.metadata || {};
+      const uid = meta.uid;
+      const plan = meta.plan;
+      const courseId = meta.courseId;
+      const categoryId = meta.categoryId;
+      const durationDays = Number(meta.durationDays || 30);
+
+      if (!uid) {
+        console.error("No uid in metadata", meta);
+        res.status(200).send("OK (no uid)");
+        return;
+      }
+
+      const now = admin.firestore.Timestamp.now();
+      const expiresAt = admin.firestore.Timestamp.fromMillis(
+        now.toMillis() + durationDays * 24 * 60 * 60 * 1000,
+      );
+
+      if (plan === "sub_monthly" || plan === "sub_yearly") {
+        // 구독: 전체 강의 오픈 → users/{uid}.entitlements.subscriptionActive = true
+        await db.doc(`users/${uid}`).set(
+          {
+            entitlements: {
+              subscriptionActive: true,
+              subscriptionPlan: plan,
+              subscriptionStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+              subscriptionExpiresAt: expiresAt,
+            },
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        console.log(`Subscription activated: uid=${uid}, plan=${plan}`);
+      } else if (plan === "category30" || plan === "category90") {
+        // 카테고리: 해당 카테고리 전체 강의 enrollment
+        if (categoryId) {
+          const coursesSnap = await db
+            .collection("courses")
+            .where("categoryId", "==", categoryId)
+            .where("published", "==", true)
+            .get();
+
+          const batch = db.batch();
+          coursesSnap.docs.forEach((cDoc) => {
+            const enrollRef = db.doc(`users/${uid}/enrollments/${cDoc.id}`);
+            batch.set(
+              enrollRef,
+              {
+                enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+                expiresAt,
+                plan,
+                stripeSessionId: session.id,
+              },
+              { merge: true },
+            );
+          });
+          await batch.commit();
+          console.log(`Category enrollment: uid=${uid}, category=${categoryId}, courses=${coursesSnap.size}`);
+        }
+      } else if (plan === "single30" || plan === "single90") {
+        // 단품: 해당 강의만 enrollment
+        if (courseId) {
+          await db.doc(`users/${uid}/enrollments/${courseId}`).set(
+            {
+              enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+              expiresAt,
+              plan,
+              stripeSessionId: session.id,
+            },
+            { merge: true },
+          );
+          console.log(`Single enrollment: uid=${uid}, courseId=${courseId}, plan=${plan}`);
+        }
+      }
+
+      // 결제 기록 저장
+      await db.collection("payments").add({
+        uid,
+        plan,
+        courseId: courseId || null,
+        categoryId: categoryId || null,
+        amount: session.amount_total,
+        currency: session.currency,
+        stripeSessionId: session.id,
+        stripePaymentIntent: session.payment_intent || null,
+        stripeSubscription: session.subscription || null,
+        status: session.payment_status,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    res.status(200).json({ received: true });
+  },
+);
 
