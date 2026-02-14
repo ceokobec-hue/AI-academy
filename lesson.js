@@ -55,7 +55,7 @@ function esc(s) {
     .replaceAll("'", "&#039;");
 }
 
-function renderHeader(course, { enrolled }) {
+function renderHeader(course, { enrolled, inviteUnlocked }) {
   const el = $("courseHeader");
   if (!el) return;
 
@@ -65,7 +65,9 @@ function renderHeader(course, { enrolled }) {
     <div class="course-meta-row">
       ${
         enrolled
-          ? `<span class="badge badge-success">수강 중</span>`
+          ? inviteUnlocked
+            ? `<span class="badge badge-success">무료 오픈</span>`
+            : `<span class="badge badge-success">수강 중</span>`
           : `<span class="badge badge-primary">${formatKrw(course.priceKrw)}</span>`
       }
       <span>수강기간: ${course.durationDays}일</span>
@@ -74,20 +76,20 @@ function renderHeader(course, { enrolled }) {
   `;
 }
 
-function renderMeta(course, { enrolled }) {
+function renderMeta(course, { enrolled, inviteUnlocked }) {
   const el = $("courseMeta");
   if (!el) return;
 
   el.innerHTML = `
     <div class="side-meta-item"><span>가격</span><span>${
-      enrolled ? "수강 중" : formatKrw(course.priceKrw)
+      enrolled ? (inviteUnlocked ? "무료 오픈" : "수강 중") : formatKrw(course.priceKrw)
     }</span></div>
     <div class="side-meta-item"><span>수강기간</span><span>${course.durationDays}일</span></div>
     <div class="side-meta-item"><span>개강일</span><span>${course.startDate}</span></div>
   `;
 }
 
-function renderCTA({ course, user, enrolled, onEnroll }) {
+function renderCTA({ course, user, enrolled, inviteUnlocked, onEnroll }) {
   const el = $("courseCTA");
   if (!el) return;
 
@@ -101,7 +103,7 @@ function renderCTA({ course, user, enrolled, onEnroll }) {
 
   if (enrolled) {
     el.innerHTML = `
-      <span class="badge badge-success">수강 중</span>
+      <span class="badge badge-success">${inviteUnlocked ? "무료 오픈" : "수강 중"}</span>
       <a class="btn btn-primary" href="#courseVideo">영상 보러가기</a>
     `;
     return;
@@ -227,6 +229,18 @@ async function checkEnrolled({ uid, courseId, db }) {
   return snap.exists();
 }
 
+async function getInviteVerified({ uid, db }) {
+  try {
+    const snap = await getDoc(doc(db, "users", uid));
+    if (!snap.exists()) return false;
+    const ent = snap.data()?.entitlements || {};
+    return ent.inviteVerified === true;
+  } catch (e) {
+    console.warn("Failed to fetch entitlements.", e);
+    return false;
+  }
+}
+
 async function enrollTest({ uid, course, db }) {
   await setDoc(
     doc(db, "users", uid, "enrollments", course.id),
@@ -271,6 +285,7 @@ function normalizeCourse(c, idFallback) {
     categoryId: String(c.categoryId || ""),
     isNew: !!c.isNew,
     isPopular: !!c.isPopular,
+    inviteFreeOpen: !!c.inviteFreeOpen,
     published: c.published !== false,
     video: c.video || { src: "", poster: "" },
     content: c.content || { overview: "", bullets: [] },
@@ -496,9 +511,9 @@ async function boot() {
   });
 
   // Default (logged out)
-  renderHeader(course, { enrolled: false });
-  renderMeta(course, { enrolled: false });
-  renderCTA({ course, user: null, enrolled: false, onEnroll: () => {} });
+  renderHeader(course, { enrolled: false, inviteUnlocked: false });
+  renderMeta(course, { enrolled: false, inviteUnlocked: false });
+  renderCTA({ course, user: null, enrolled: false, inviteUnlocked: false, onEnroll: () => {} });
   currentUser = null;
   currentEnrolled = false;
   renderAll();
@@ -510,36 +525,44 @@ async function boot() {
     if (!user) {
       currentUser = null;
       currentEnrolled = false;
-      renderHeader(course, { enrolled: false });
-      renderMeta(course, { enrolled: false });
-      renderCTA({ course, user: null, enrolled: false, onEnroll: () => {} });
+      renderHeader(course, { enrolled: false, inviteUnlocked: false });
+      renderMeta(course, { enrolled: false, inviteUnlocked: false });
+      renderCTA({ course, user: null, enrolled: false, inviteUnlocked: false, onEnroll: () => {} });
       renderAll();
       return;
     }
 
-    let enrolled = false;
+    let enrolledDoc = false;
     try {
-      enrolled = await checkEnrolled({ uid: user.uid, courseId: course.id, db });
+      enrolledDoc = await checkEnrolled({ uid: user.uid, courseId: course.id, db });
     } catch (e) {
       console.error(e);
-      enrolled = false;
+      enrolledDoc = false;
     }
+    const inviteVerified = await getInviteVerified({ uid: user.uid, db });
+    const inviteUnlocked = !enrolledDoc && inviteVerified && !!course.inviteFreeOpen;
+    const enrolled = enrolledDoc || inviteUnlocked;
 
     const refresh = async () => {
+      let enrolledDoc2 = false;
       try {
-        enrolled = await checkEnrolled({ uid: user.uid, courseId: course.id, db });
+        enrolledDoc2 = await checkEnrolled({ uid: user.uid, courseId: course.id, db });
       } catch {
-        enrolled = false;
+        enrolledDoc2 = false;
       }
+      const inviteVerified2 = await getInviteVerified({ uid: user.uid, db });
+      const inviteUnlocked2 = !enrolledDoc2 && inviteVerified2 && !!course.inviteFreeOpen;
+      const enrolled2 = enrolledDoc2 || inviteUnlocked2;
 
       currentUser = user;
-      currentEnrolled = enrolled;
-      renderHeader(course, { enrolled });
-      renderMeta(course, { enrolled });
+      currentEnrolled = enrolled2;
+      renderHeader(course, { enrolled: enrolled2, inviteUnlocked: inviteUnlocked2 });
+      renderMeta(course, { enrolled: enrolled2, inviteUnlocked: inviteUnlocked2 });
       renderCTA({
         course,
         user,
-        enrolled,
+        enrolled: enrolled2,
+        inviteUnlocked: inviteUnlocked2,
         onEnroll: async () => {
           try {
             await enrollTest({ uid: user.uid, course, db });

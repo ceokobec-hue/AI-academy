@@ -58,9 +58,11 @@ function pickFeatured(courses, flagKey, excludeId = "") {
     .sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)))[0];
 }
 
-function courseCard(course, { enrolled, isAdmin }) {
+function courseCard(course, { enrolled, inviteUnlocked, isAdmin }) {
   const priceOrBadge = enrolled
-    ? `<span class="badge badge-success">수강 중</span>`
+    ? inviteUnlocked
+      ? `<span class="badge badge-success">무료 오픈</span>`
+      : `<span class="badge badge-success">수강 중</span>`
     : `<span class="badge badge-primary">${formatKrw(course.priceKrw)}</span>`;
 
   const thumb = course.thumbnailUrl
@@ -94,16 +96,20 @@ function courseCard(course, { enrolled, isAdmin }) {
   `;
 }
 
-function featuredCard(course, label, { enrolled, isAdmin }) {
+function featuredCard(course, label, { enrolled, inviteUnlocked, isAdmin }) {
   const badge = label === "신규 강의" ? "badge-primary" : "badge-success";
-  const status = enrolled ? `<span class="badge badge-success">수강 중</span>` : "";
+  const status = enrolled
+    ? inviteUnlocked
+      ? `<span class="badge badge-success">무료 오픈</span>`
+      : `<span class="badge badge-success">수강 중</span>`
+    : "";
   return `
     <div class="featured-card">
       <div class="featured-badge-row">
         <span class="badge ${badge}">${label}</span>
         ${status}
       </div>
-      ${courseCard(course, { enrolled, isAdmin })}
+      ${courseCard(course, { enrolled, inviteUnlocked, isAdmin })}
     </div>
   `;
 }
@@ -117,6 +123,18 @@ async function getEnrollmentMap({ uid, db, courses }) {
     }),
   );
   return Object.fromEntries(pairs);
+}
+
+async function getInviteVerified({ uid, db }) {
+  try {
+    const snap = await getDoc(doc(db, "users", uid));
+    if (!snap.exists()) return false;
+    const ent = snap.data()?.entitlements || {};
+    return ent.inviteVerified === true;
+  } catch (e) {
+    console.warn("Failed to fetch entitlements.", e);
+    return false;
+  }
 }
 
 async function fetchCategories(db) {
@@ -167,6 +185,7 @@ function normalizeCourses(list) {
     categoryId: String(c.categoryId || ""),
     isNew: !!c.isNew,
     isPopular: !!c.isPopular,
+    inviteFreeOpen: !!c.inviteFreeOpen,
     title: String(c.title || ""),
     shortDescription: String(c.shortDescription || ""),
     priceKrw: Number(c.priceKrw || 0),
@@ -255,6 +274,7 @@ function renderCatalog({ categories, enrollmentMap, courses, isAdmin }) {
           featuredNew
             ? featuredCard(featuredNew, "신규 강의", {
                 enrolled: !!enrollmentMap?.[featuredNew.id],
+                inviteUnlocked: !!featuredNew.inviteUnlocked,
                 isAdmin,
               })
             : ""
@@ -263,6 +283,7 @@ function renderCatalog({ categories, enrollmentMap, courses, isAdmin }) {
           featuredPopular
             ? featuredCard(featuredPopular, "인기 강의", {
                 enrolled: !!enrollmentMap?.[featuredPopular.id],
+                inviteUnlocked: !!featuredPopular.inviteUnlocked,
                 isAdmin,
               })
             : ""
@@ -290,7 +311,13 @@ function renderCatalog({ categories, enrollmentMap, courses, isAdmin }) {
             ${
               courses.length
                 ? `<div class="course-grid">${courses
-                    .map((c) => courseCard(c, { enrolled: !!enrollmentMap?.[c.id], isAdmin }))
+                    .map((c) =>
+                      courseCard(c, {
+                        enrolled: !!enrollmentMap?.[c.id],
+                        inviteUnlocked: !!c.inviteUnlocked,
+                        isAdmin,
+                      }),
+                    )
                     .join("")}</div>`
                 : `<p class="muted" style="margin:0;">아직 강의가 없습니다.</p>`
             }
@@ -345,9 +372,19 @@ function boot() {
       console.warn("Failed to fetch enrollments.", e);
       enrollmentMap = {};
     }
+
+    const inviteVerified = await getInviteVerified({ uid: user.uid, db });
+    const coursesUi = courses.map((c) => {
+      const enrolledDoc = !!enrollmentMap?.[c.id];
+      const inviteUnlocked = !enrolledDoc && inviteVerified && !!c.inviteFreeOpen;
+      return { ...c, inviteUnlocked };
+    });
+    const accessMap = Object.fromEntries(
+      coursesUi.map((c) => [c.id, !!enrollmentMap?.[c.id] || !!c.inviteUnlocked]),
+    );
     const isAdmin =
       typeof user.email === "string" && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-    renderCatalog({ categories, enrollmentMap, courses, isAdmin });
+    renderCatalog({ categories, enrollmentMap: accessMap, courses: coursesUi, isAdmin });
   });
 }
 

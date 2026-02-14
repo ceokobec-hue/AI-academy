@@ -98,6 +98,11 @@ function renderLoggedIn({ loginLink, signupLink, authUI, displayName, onLogout }
 
   authUI.innerHTML = "";
 
+  const inviteLink = document.createElement("a");
+  inviteLink.className = "nav-link";
+  inviteLink.href = "./invite.html";
+  inviteLink.textContent = "초대코드";
+
   const nameEl = document.createElement("span");
   nameEl.className = "nav-user";
   nameEl.textContent = `${displayName}님`;
@@ -108,7 +113,7 @@ function renderLoggedIn({ loginLink, signupLink, authUI, displayName, onLogout }
   btn.textContent = "로그아웃";
   btn.addEventListener("click", onLogout);
 
-  authUI.append(nameEl, btn);
+  authUI.append(inviteLink, nameEl, btn);
 }
 
 async function getDisplayName({ user, db }) {

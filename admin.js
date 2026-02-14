@@ -225,6 +225,7 @@ async function boot() {
           form.querySelector('input[name="isNew"]').checked = !!course.isNew;
           form.querySelector('input[name="isPopular"]').checked = !!course.isPopular;
           form.querySelector('input[name="published"]').checked = course.published !== false;
+          form.querySelector('input[name="inviteFreeOpen"]').checked = !!course.inviteFreeOpen;
           $("overview").value = course.content?.overview || "";
           $("bullets").value = (course.content?.bullets || []).join("\n");
           const r0 = (course.resources || [])[0] || {};
@@ -257,6 +258,7 @@ async function boot() {
       const isNew = !!fd.get("isNew");
       const isPopular = !!fd.get("isPopular");
       const published = !!fd.get("published");
+      const inviteFreeOpen = !!fd.get("inviteFreeOpen");
 
       if (!title || !shortDescription || !categoryId || !startDate || !durationDays) {
         setStatus(msgEl, "필수 항목(제목/설명/카테고리/개강일/기간)을 입력해 주세요.", "error");
@@ -351,6 +353,7 @@ async function boot() {
           isNew,
           isPopular,
           published,
+          inviteFreeOpen,
           thumbnailUrl: thumbnailUrl || existing.thumbnailUrl || "",
           video: {
             src: videoSrc || existing.video?.src || "",

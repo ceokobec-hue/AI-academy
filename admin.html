@@ -34,7 +34,13 @@
 
         <nav class="nav" aria-label="주요 메뉴">
           <a class="nav-link" href="./course.html">강의수강</a>
-          <a class="nav-link" href="#materials" data-toast="교육자료는 준비 중입니다.">교육자료</a>
+          <a
+            class="nav-link"
+            href="https://www.lecturehub.co.kr/materials.php"
+            target="_blank"
+            rel="noopener noreferrer"
+            >교육자료</a
+          >
           <a class="nav-link" href="./community.html">커뮤니티</a>
           <a class="nav-link" href="./realtimeboard.html">실시간 게시판</a>
           <a class="nav-link" data-auth-link="login" href="./login.html">로그인</a>
@@ -77,6 +83,7 @@
                   <div class="field">
                     <label class="label" for="categoryId">카테고리</label>
                     <select class="select" id="categoryId" name="categoryId" required></select>
+                    <p class="hint hint-spacer" aria-hidden="true">정렬용</p>
                   </div>
                 </div>
 
@@ -112,6 +119,9 @@
                       <label class="check"><input type="checkbox" name="isNew" /> <span>신규 강의</span></label>
                       <label class="check"><input type="checkbox" name="isPopular" /> <span>인기 강의</span></label>
                       <label class="check"><input type="checkbox" name="published" checked /> <span>공개</span></label>
+                      <label class="check"
+                        ><input type="checkbox" name="inviteFreeOpen" /> <span>초대코드 무료 오픈</span></label
+                      >
                     </div>
                   </div>
                 </div>

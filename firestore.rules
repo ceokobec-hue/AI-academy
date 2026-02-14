@@ -28,8 +28,29 @@ service cloud.firestore {
     }
 
     // 유저 본인 문서 + 하위 문서 접근 허용 (로그인/헤더 표시용)
-    match /users/{userId}/{document=**} {
+    match /users/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+
+      // 클라이언트에서 entitlements(초대코드 권한)는 수정 불가 (서버 함수만)
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && !("entitlements" in request.resource.data);
+
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).changedKeys().hasAny(["entitlements"]);
+    }
+
+    match /users/{userId}/enrollments/{courseId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    // 초대코드: 운영/관리자만 관리
+    match /inviteCodes/{codeId} {
+      allow read, write: if isAdmin();
+      match /uses/{uid} {
+        allow read, write: if isAdmin();
+      }
     }
 
     // 강의/카테고리: 카탈로그는 공개 read, 관리는 관리자 write
