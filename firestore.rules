@@ -48,6 +48,12 @@ service cloud.firestore {
       allow write: if signedIn() && request.auth.uid == userId;
     }
 
+    // 시청 로그(누적 시청시간): 환불 판단/학습분석용
+    // - 사용자는 본인 로그만 read/write 가능
+    match /users/{userId}/watchLogs/{logId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
     // 결제 기록: 서버에서만 생성, 사용자는 본인 것만 읽기
     match /payments/{paymentId} {
       allow read: if signedIn() && resource.data.uid == request.auth.uid;

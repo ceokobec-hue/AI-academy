@@ -14,6 +14,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 import {
   getDownloadURL,
@@ -184,6 +185,7 @@ async function boot() {
   const form = $("adminForm");
   const msgEl = $("adminMsg");
   const resultEl = $("adminResult");
+  const deleteBtn = $("btnSoftDelete");
   const categorySelect = $("categoryId");
   const price30El = $("priceKrw");
   const price90El = $("priceKrw90");
@@ -318,17 +320,76 @@ async function boot() {
           $("resourceDesc").value = r0.description || "";
           $("resourceCode").value = r0.code || "";
           resultEl.innerHTML = `<p class="hint" style="margin:0;">수정 모드: <b>${editId}</b></p>`;
+
+          // 소프트 삭제 버튼 노출
+          if (deleteBtn) {
+            deleteBtn.style.display = "inline-flex";
+            deleteBtn.disabled = false;
+          }
+
+          // 이미 삭제/비공개인 경우 힌트 표시
+          const isDeleted = course.deleted === true;
+          const isPublished = course.published !== false;
+          if (isDeleted || !isPublished) {
+            const extra = isDeleted ? " (삭제됨/숨김 처리됨)" : " (비공개 상태)";
+            resultEl.innerHTML = `<p class="hint" style="margin:0;">수정 모드: <b>${editId}</b>${extra}</p>`;
+          }
         } else {
           resultEl.innerHTML = `<p class="hint" style="margin:0;">문서가 없어 새로 생성합니다: <b>${editId}</b></p>`;
           $("courseId").value = editId;
+          if (deleteBtn) deleteBtn.style.display = "none";
         }
       } catch (e) {
         console.error(e);
       }
+    } else {
+      if (deleteBtn) deleteBtn.style.display = "none";
     }
 
     wirePricingCalculator();
     await applyCategoryPricingDefaultsIfNeeded();
+
+    // 소프트 삭제(숨김) 기능
+    deleteBtn?.addEventListener("click", async () => {
+      const courseId = String($("courseId")?.value || "").trim();
+      if (!courseId) {
+        alert("courseId가 비어있습니다. 먼저 수정 모드로 진입해 주세요.");
+        return;
+      }
+
+      const ok1 = window.confirm(
+        "정말 이 강의를 삭제(숨김) 처리할까요?\n\n- 카탈로그/상세에서 숨겨집니다.\n- 기존 수강자 기록은 유지됩니다.\n\n(복구는 관리자에서 '공개'로 다시 저장하면 됩니다.)",
+      );
+      if (!ok1) return;
+
+      const phrase = window.prompt("삭제를 진행하려면 아래에 '삭제'라고 입력해 주세요.");
+      if (phrase !== "삭제") {
+        alert("삭제가 취소되었습니다.");
+        return;
+      }
+
+      deleteBtn.disabled = true;
+      setStatus(msgEl, "삭제(숨김) 처리 중...", "info");
+
+      try {
+        await updateDoc(doc(db, "courses", courseId), {
+          published: false,
+          deleted: true,
+          deletedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        // UI 동기화
+        const pubCb = form.querySelector('input[name="published"]');
+        if (pubCb) pubCb.checked = false;
+
+        setStatus(msgEl, "삭제(숨김) 처리 완료. 카탈로그에서 숨겨졌습니다.", "success");
+      } catch (err) {
+        console.error(err);
+        deleteBtn.disabled = false;
+        setStatus(msgEl, `삭제 실패: ${err?.message || "알 수 없는 오류"}`, "error");
+      }
+    });
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>카테고리 이용권 | 김지백 AI경영아카데미</title>
+    <meta name="description" content="카테고리 이용권 안내 및 결제" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./script.js"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="./index.html">
+          <img src="./assets/logo.png" alt="김지백 AI경영아카데미" />
+        </a>
+        <nav class="nav" aria-label="주요 메뉴">
+          <a class="nav-link" href="./course.html">강의 수강</a>
+          <a class="nav-link" href="https://www.lecturehub.co.kr/materials.php" target="_blank" rel="noreferrer"
+            >교육자료</a
+          >
+          <a class="nav-link" href="./community.html">커뮤니키</a>
+          <a class="nav-link" href="./realtimeboard.html">실시간 게시판</a>
+          <a class="nav-link" href="./admin.html" data-admin-only>관리자</a>
+          <a class="nav-link" href="./invite.html" data-auth-only>초대코드</a>
+          <a class="nav-link" href="./login.html" data-guest-only>로그인/회원가입</a>
+          <button class="btn btn-ghost btn-sm" type="button" id="btnLogout" data-auth-only>로그아웃</button>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="container">
+          <div class="card" style="padding: 18px;">
+            <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+              <h1 style="margin:0;font-weight:900;">카테고리 이용권</h1>
+              <a class="btn btn-ghost btn-sm" href="./lesson.html" id="backToLesson">← 강의로 돌아가기</a>
+            </div>
+            <p class="muted" style="margin:10px 0 0; line-height:1.6;">
+              카테고리 이용권은 <b>해당 분야(카테고리)의 모든 강의</b>를 기간 동안 자유롭게 수강할 수 있는 상품입니다.
+              새 강의가 추가되면 자동으로 포함됩니다.
+            </p>
+          </div>
+
+          <div class="grid2" style="margin-top: 14px;">
+            <div class="card" style="padding: 18px;">
+              <h3 class="side-title" style="margin-bottom: 8px;">포함 강의</h3>
+              <div id="categoryCourses" class="side-meta"></div>
+            </div>
+            <div class="card" style="padding: 18px;">
+              <h3 class="side-title" style="margin-bottom: 8px;">결제</h3>
+              <div id="categoryPricing" class="pricing-table"></div>
+              <div id="categoryCTA" class="side-cta"></div>
+              <p class="hint" style="margin-top: 10px;">
+                결제 후 바로 수강이 시작됩니다.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
+    <script type="module" src="./header-auth.js"></script>
+    <script type="module" src="./category-pass.js"></script>
+  </body>
+</html>
+
