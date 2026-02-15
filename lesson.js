@@ -60,7 +60,7 @@ function esc(s) {
     .replaceAll("'", "&#039;");
 }
 
-function renderHeader(course, { enrolled, inviteUnlocked }) {
+function renderHeader(course, { enrolled, accessBadgeLabel }) {
   const el = $("courseHeader");
   if (!el) return;
 
@@ -70,9 +70,7 @@ function renderHeader(course, { enrolled, inviteUnlocked }) {
     <div class="course-meta-row">
       ${
         enrolled
-          ? inviteUnlocked
-            ? `<span class="badge badge-success">무료 오픈</span>`
-            : `<span class="badge badge-success">수강 중</span>`
+          ? `<span class="badge badge-success">${esc(accessBadgeLabel || "수강 중")}</span>`
           : `<span class="badge badge-primary">${formatKrw(course.priceKrw)}</span>`
       }
       <span>수강기간: ${course.durationDays}일</span>
@@ -96,13 +94,13 @@ function pricingRow(label, price, { tag, recommended } = {}) {
   `;
 }
 
-function renderMeta(course, { enrolled, inviteUnlocked }) {
+function renderMeta(course, { enrolled, accessLabel }) {
   const el = $("courseMeta");
   if (!el) return;
 
   if (enrolled) {
     el.innerHTML = `
-      <div class="side-meta-item"><span>상태</span><span>${inviteUnlocked ? "무료 오픈" : "수강 중"}</span></div>
+      <div class="side-meta-item"><span>상태</span><span>${esc(accessLabel || "수강 중")}</span></div>
       <div class="side-meta-item"><span>수강기간</span><span>${course.durationDays}일</span></div>
       <div class="side-meta-item"><span>개강일</span><span>${course.startDate}</span></div>
     `;
@@ -129,7 +127,7 @@ function renderMeta(course, { enrolled, inviteUnlocked }) {
   `;
 }
 
-function renderCTA({ course, user, enrolled, inviteUnlocked, functions }) {
+function renderCTA({ course, user, enrolled, accessBadgeLabel, functions }) {
   const el = $("courseCTA");
   if (!el) return;
 
@@ -143,7 +141,7 @@ function renderCTA({ course, user, enrolled, inviteUnlocked, functions }) {
 
   if (enrolled) {
     el.innerHTML = `
-      <span class="badge badge-success">${inviteUnlocked ? "무료 오픈" : "수강 중"}</span>
+      <span class="badge badge-success">${esc(accessBadgeLabel || "수강 중")}</span>
       <a class="btn btn-primary" href="#courseVideo">영상 보러가기</a>
     `;
     return;
@@ -299,21 +297,53 @@ function renderFiles(unit, { user, enrolled }) {
     .join("");
 }
 
-async function checkEnrolled({ uid, courseId, db }) {
-  const snap = await getDoc(doc(db, "users", uid, "enrollments", courseId));
-  return snap.exists();
+function tsToMillis(v) {
+  if (!v) return null;
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (typeof v.toMillis === "function") return v.toMillis();
+  if (typeof v.seconds === "number") return v.seconds * 1000;
+  return null;
 }
 
-async function getInviteVerified({ uid, db }) {
-  try {
-    const snap = await getDoc(doc(db, "users", uid));
-    if (!snap.exists()) return false;
-    const ent = snap.data()?.entitlements || {};
-    return ent.inviteVerified === true;
-  } catch (e) {
-    console.warn("Failed to fetch entitlements.", e);
-    return false;
-  }
+function isActiveUntil(expiresAt) {
+  const ms = tsToMillis(expiresAt);
+  if (!ms) return true; // 만료가 없으면(레거시/테스트) 활성으로 취급
+  return ms > Date.now();
+}
+
+async function checkEnrolled({ uid, courseId, db }) {
+  const snap = await getDoc(doc(db, "users", uid, "enrollments", courseId));
+  if (!snap.exists()) return false;
+  const data = snap.data() || {};
+  // expiresAt가 있으면 만료 체크
+  if ("expiresAt" in data) return isActiveUntil(data.expiresAt);
+  return true;
+}
+
+function getCategoryPassEntry(ent, categoryId) {
+  const pass = ent?.categoryPass || {};
+  if (!categoryId) return null;
+  return pass?.[categoryId] || null;
+}
+
+function isCategoryPassActive(ent, categoryId) {
+  const entry = getCategoryPassEntry(ent, categoryId);
+  if (!entry) return false;
+  // entry 형태: { expiresAt: Timestamp } 또는 Timestamp 자체도 허용
+  const expiresAt = entry.expiresAt || entry;
+  return isActiveUntil(expiresAt);
+}
+
+function computeAccessLabel({ enrolledDoc, inviteUnlocked, categoryPassActive, subscriptionActive }) {
+  if (inviteUnlocked) return "무료 오픈";
+  if (subscriptionActive) return "전체 이용권";
+  if (categoryPassActive) return "카테고리 이용권";
+  if (enrolledDoc) return "수강 중";
+  return "";
 }
 
 async function enrollTest({ uid, course, db }) {
@@ -593,9 +623,9 @@ async function boot() {
   });
 
   // Default (logged out)
-  renderHeader(course, { enrolled: false, inviteUnlocked: false });
-  renderMeta(course, { enrolled: false, inviteUnlocked: false });
-  renderCTA({ course, user: null, enrolled: false, inviteUnlocked: false, functions: null });
+  renderHeader(course, { enrolled: false, accessBadgeLabel: "" });
+  renderMeta(course, { enrolled: false, accessLabel: "" });
+  renderCTA({ course, user: null, enrolled: false, accessBadgeLabel: "", functions: null });
   currentUser = null;
   currentEnrolled = false;
   renderAll();
@@ -621,9 +651,9 @@ async function boot() {
     if (!user) {
       currentUser = null;
       currentEnrolled = false;
-      renderHeader(course, { enrolled: false, inviteUnlocked: false });
-      renderMeta(course, { enrolled: false, inviteUnlocked: false });
-      renderCTA({ course, user: null, enrolled: false, inviteUnlocked: false, functions: null });
+      renderHeader(course, { enrolled: false, accessBadgeLabel: "" });
+      renderMeta(course, { enrolled: false, accessLabel: "" });
+      renderCTA({ course, user: null, enrolled: false, accessBadgeLabel: "", functions: null });
       renderAll();
       return;
     }
@@ -635,30 +665,32 @@ async function boot() {
       console.error(e);
       enrolledDoc = false;
     }
-    const inviteVerified = await getInviteVerified({ uid: user.uid, db });
-    const inviteUnlocked = !enrolledDoc && inviteVerified && !!course.inviteFreeOpen;
-    const enrolled = enrolledDoc || inviteUnlocked;
-
-    // 구독 상태 확인
-    let subscriptionActive = false;
+    // entitlements는 여기서 1번만 읽어서 재사용
+    let ent = {};
     try {
       const userSnap = await getDoc(doc(db, "users", user.uid));
-      if (userSnap.exists()) {
-        subscriptionActive = !!userSnap.data()?.entitlements?.subscriptionActive;
-      }
+      ent = userSnap.exists() ? (userSnap.data()?.entitlements || {}) : {};
     } catch { /* ignore */ }
 
-    const finalEnrolled = enrolled || subscriptionActive;
+    const inviteVerified = ent.inviteVerified === true;
+    const inviteUnlocked = !enrolledDoc && inviteVerified && !!course.inviteFreeOpen;
+    const categoryPassActive = isCategoryPassActive(ent, course.categoryId);
+
+    // (참고) 구독은 나중에 빼더라도, 엔타이틀먼트 구조는 유지해도 됩니다.
+    const subscriptionActive = ent.subscriptionActive === true && isActiveUntil(ent.subscriptionExpiresAt);
+
+    const finalEnrolled = enrolledDoc || inviteUnlocked || categoryPassActive || subscriptionActive;
+    const accessLabel = computeAccessLabel({ enrolledDoc, inviteUnlocked, categoryPassActive, subscriptionActive });
 
     currentUser = user;
     currentEnrolled = finalEnrolled;
-    renderHeader(course, { enrolled: finalEnrolled, inviteUnlocked });
-    renderMeta(course, { enrolled: finalEnrolled, inviteUnlocked });
+    renderHeader(course, { enrolled: finalEnrolled, accessBadgeLabel: accessLabel });
+    renderMeta(course, { enrolled: finalEnrolled, accessLabel });
     renderCTA({
       course,
       user,
       enrolled: finalEnrolled,
-      inviteUnlocked,
+      accessBadgeLabel: accessLabel,
       functions,
     });
     renderAll();

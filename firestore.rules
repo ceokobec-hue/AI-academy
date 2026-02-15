@@ -66,6 +66,12 @@ service cloud.firestore {
     match /courses/{courseId} {
       allow read: if true;
       allow write: if isAdmin();
+
+      // 강의 상세의 레슨 목록(하위 컬렉션)은 별도 규칙이 필요함
+      match /lessons/{lessonId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
     }
 
     match /categories/{categoryId} {

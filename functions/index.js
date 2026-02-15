@@ -7,11 +7,12 @@ admin.initializeApp();
 
 const REGION = "asia-northeast3";
 
-// Stripe 시크릿 키를 Firebase Secret Manager에 저장합니다.
-// 배포 전에: firebase functions:secrets:set STRIPE_SECRET_KEY
-// 배포 전에: firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
-const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
-const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
+// Stripe 키는 Secret Manager로 관리합니다. (Functions v2에서 functions.config() 사용 불가)
+// 설정:
+// - npx firebase functions:secrets:set STRIPE_SECRET_KEY
+// - npx firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
+const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
+const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 function normalizeCode(raw) {
   return String(raw || "")
@@ -219,7 +220,7 @@ const SUB_YEARLY = 890000;
  * plan 종류: "single30" | "single90" | "category30" | "category90" | "sub_monthly" | "sub_yearly"
  */
 exports.createCheckoutSession = onCall(
-  { region: REGION, secrets: [stripeSecretKey] },
+  { region: REGION, secrets: [STRIPE_SECRET_KEY] },
   async (req) => {
     if (!req.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
     if (req.auth.token?.firebase?.sign_in_provider === "anonymous") {
@@ -231,7 +232,7 @@ exports.createCheckoutSession = onCall(
     if (!plan) throw new HttpsError("invalid-argument", "plan이 필요합니다.");
 
     const db = admin.firestore();
-    const stripe = require("stripe")(stripeSecretKey.value());
+    const stripe = require("stripe")(STRIPE_SECRET_KEY.value());
 
     let amount = 0;
     let description = "";
@@ -356,7 +357,7 @@ exports.createCheckoutSession = onCall(
 exports.stripeWebhook = onRequest(
   {
     region: REGION,
-    secrets: [stripeSecretKey, stripeWebhookSecret],
+    secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET],
     // Stripe webhook은 raw body가 필요
     invoker: "public",
   },
@@ -366,7 +367,7 @@ exports.stripeWebhook = onRequest(
       return;
     }
 
-    const stripe = require("stripe")(stripeSecretKey.value());
+    const stripe = require("stripe")(STRIPE_SECRET_KEY.value());
     const sig = req.headers["stripe-signature"];
 
     let event;
@@ -374,7 +375,7 @@ exports.stripeWebhook = onRequest(
       event = stripe.webhooks.constructEvent(
         req.rawBody,
         sig,
-        stripeWebhookSecret.value(),
+        STRIPE_WEBHOOK_SECRET.value(),
       );
     } catch (err) {
       console.error("Webhook signature verification failed.", err.message);
@@ -420,30 +421,25 @@ exports.stripeWebhook = onRequest(
         );
         console.log(`Subscription activated: uid=${uid}, plan=${plan}`);
       } else if (plan === "category30" || plan === "category90") {
-        // 카테고리: 해당 카테고리 전체 강의 enrollment
+        // 카테고리: entitlements.categoryPass.{categoryId} = { expiresAt, ... } 로 1회 저장
         if (categoryId) {
-          const coursesSnap = await db
-            .collection("courses")
-            .where("categoryId", "==", categoryId)
-            .where("published", "==", true)
-            .get();
-
-          const batch = db.batch();
-          coursesSnap.docs.forEach((cDoc) => {
-            const enrollRef = db.doc(`users/${uid}/enrollments/${cDoc.id}`);
-            batch.set(
-              enrollRef,
-              {
-                enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
-                expiresAt,
-                plan,
-                stripeSessionId: session.id,
+          await db.doc(`users/${uid}`).set(
+            {
+              entitlements: {
+                categoryPass: {
+                  [categoryId]: {
+                    expiresAt,
+                    plan,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    stripeSessionId: session.id,
+                  },
+                },
               },
-              { merge: true },
-            );
-          });
-          await batch.commit();
-          console.log(`Category enrollment: uid=${uid}, category=${categoryId}, courses=${coursesSnap.size}`);
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+          console.log(`Category pass activated: uid=${uid}, category=${categoryId}, plan=${plan}`);
         }
       } else if (plan === "single30" || plan === "single90") {
         // 단품: 해당 강의만 enrollment
