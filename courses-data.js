@@ -125,8 +125,9 @@ export const COURSES = [
 export const DEFAULT_CATEGORIES = [
   { id: "ai-basic", name: "AI 기초반", order: 1 },
   { id: "ai-office", name: "AI 직장인반", order: 2 },
-  { id: "ai-business", name: "AI 비즈니스반", order: 3 },
-  { id: "ai-job", name: "AI 취업준비생반", order: 4 },
+  { id: "ai-business-basic", name: "비즈니스기초반", order: 3 },
+  { id: "ai-business", name: "AI 비즈니스반", order: 4 },
+  { id: "ai-job", name: "AI 취업준비반", order: 5 },
 ];
 
 export function formatKrw(amount) {

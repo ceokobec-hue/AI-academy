@@ -62,9 +62,40 @@ function esc(s) {
     .replaceAll("'", "&#039;");
 }
 
-function renderHeader(course, { enrolled, accessBadgeLabel }) {
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function formatYmdFromMillis(ms) {
+  if (!Number.isFinite(Number(ms))) return "";
+  const d = new Date(Number(ms));
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function addDaysFromNow(days) {
+  const n = Number(days);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Date.now() + n * 24 * 60 * 60 * 1000;
+}
+
+function formatDurationLabel(seconds) {
+  const s = Number(seconds || 0);
+  if (!Number.isFinite(s) || s <= 0) return "";
+  const m = Math.max(1, Math.round(s / 60));
+  if (m < 60) return `${m}분`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return mm ? `${h}시간 ${mm}분` : `${h}시간`;
+}
+
+function renderHeader(course, { enrolled, accessBadgeLabel, purchaseTerm, accessExpiresAt }) {
   const el = $("courseHeader");
   if (!el) return;
+
+  const termDays = Number(purchaseTerm) === 90 ? 90 : 30;
+  const deadlineMs = addDaysFromNow(termDays);
+  const deadlineLabel = deadlineMs ? formatYmdFromMillis(deadlineMs) : "";
+  const accessExpiryLabel = formatYmdFromMillis(tsToMillis(accessExpiresAt));
 
   el.innerHTML = `
     <h1 class="course-header-title">${esc(course.title)}</h1>
@@ -75,8 +106,13 @@ function renderHeader(course, { enrolled, accessBadgeLabel }) {
           ? `<span class="badge badge-success">${esc(accessBadgeLabel || "수강 중")}</span>`
           : `<span class="badge badge-primary">${formatKrw(course.priceKrw)}</span>`
       }
-      <span>수강기간: ${course.durationDays}일</span>
-      <span>개강일: ${course.startDate}</span>
+      ${
+        enrolled
+          ? `<span>수강기간: ${course.durationDays}일</span>
+             <span>마감일: ${esc(accessExpiryLabel || "-")}</span>`
+          : `<span>이용기간: ${esc(termDays)}일</span>
+             <span>마감일: ${esc(deadlineLabel || "-")}</span>`
+      }
     </div>
   `;
 }
@@ -94,10 +130,10 @@ try {
   // ignore
 }
 
-// 결제 UI: 기간 선택(기본 90일)
-let purchaseTerm = 90; // 30 | 90
+// 결제 UI: 기간 선택(기본 30일)
+let purchaseTerm = 30; // 30 | 90
 try {
-  const v = Number(window.localStorage?.getItem?.("lessonPurchaseTermDays") || 90);
+  const v = Number(window.localStorage?.getItem?.("lessonPurchaseTermDays") || 30);
   if (v === 30 || v === 90) purchaseTerm = v;
 } catch {
   // ignore
@@ -119,6 +155,7 @@ function pricingRow(label, price, { tag, recommended } = {}) {
 function renderMeta(course, {
   enrolled,
   accessLabel,
+  accessExpiresAt,
   purchaseMode: mode,
   purchaseTerm,
   onPurchaseModeChange,
@@ -128,10 +165,11 @@ function renderMeta(course, {
   if (!el) return;
 
   if (enrolled) {
+    const accessExpiryLabel = formatYmdFromMillis(tsToMillis(accessExpiresAt));
     el.innerHTML = `
       <div class="side-meta-item"><span>상태</span><span>${esc(accessLabel || "수강 중")}</span></div>
       <div class="side-meta-item"><span>수강기간</span><span>${course.durationDays}일</span></div>
-      <div class="side-meta-item"><span>개강일</span><span>${course.startDate}</span></div>
+      <div class="side-meta-item"><span>마감일</span><span>${esc(accessExpiryLabel || "-")}</span></div>
     `;
     return;
   }
@@ -185,11 +223,11 @@ function renderMeta(course, {
     <div class="pricing-table">
       <h4 class="pricing-title">${heading}</h4>
       <div class="plan-switch" style="margin-bottom: 8px;">
-        <div class="plan-switch-label">기간 선택</div>
+        <div class="plan-switch-label">기간 선택 (30일, 90일)</div>
         <div class="plan-switch-row" style="grid-template-columns: 1fr;">
-          <select id="purchaseTermSelect" class="plan-switch-select" aria-label="기간 선택">
+          <select id="purchaseTermSelect" class="plan-switch-select" aria-label="기간 선택 (30일, 90일)">
             <option value="30" ${safeTerm === 30 ? "selected" : ""} ${termAvailable30 ? "" : "disabled"}>30일</option>
-            <option value="90" ${safeTerm === 90 ? "selected" : ""} ${termAvailable90 ? "" : "disabled"}>90일 (추천)</option>
+            <option value="90" ${safeTerm === 90 ? "selected" : ""} ${termAvailable90 ? "" : "disabled"}>90일</option>
           </select>
         </div>
         <div class="plan-row plan-row--rec" style="margin:8px 0 0;">
@@ -245,6 +283,7 @@ function renderCTA({
   user,
   enrolled,
   accessBadgeLabel,
+  accessExpiresAt,
   functions,
   purchaseMode: mode,
   purchaseTerm,
@@ -298,6 +337,8 @@ function renderCTA({
         : "single30";
   const selectedPrice = safeTerm === 90 ? price90 : price30;
   const buttonLabelPrefix = safeMode === "category" ? "카테고리 이용권" : "단품 수강";
+  const deadlineMs = addDaysFromNow(safeTerm);
+  const deadlineLabel = deadlineMs ? formatYmdFromMillis(deadlineMs) : "";
 
   el.innerHTML = `
     <div class="plan-buttons">
@@ -306,8 +347,8 @@ function renderCTA({
       </button>
     </div>
     <div class="side-meta" style="margin-top:10px;">
-      <div class="side-meta-item"><span>수강기간</span><span>${course.durationDays}일</span></div>
-      <div class="side-meta-item"><span>개강일</span><span>${course.startDate}</span></div>
+      <div class="side-meta-item"><span>이용기간</span><span>${esc(safeTerm)}일</span></div>
+      <div class="side-meta-item"><span>마감일</span><span>${esc(deadlineLabel || "-")}</span></div>
     </div>
     <p class="hint" style="margin-top:10px;">결제 후 바로 수강이 시작됩니다.</p>
   `;
@@ -319,11 +360,14 @@ function renderCTA({
     const prevText = checkoutBtn.textContent;
     checkoutBtn.textContent = "결제 준비 중…";
     try {
-      const createCheckout = httpsCallable(functions, "createCheckoutSession");
-      const result = await createCheckout({ plan, courseId: course.id });
-      const url = result.data?.url;
-      if (url) window.location.href = url;
-      else throw new Error("결제 URL을 받지 못했습니다.");
+      const createOrder = httpsCallable(functions, "createPayPalOrder");
+      const result = await createOrder({ plan, courseId: course.id });
+      const approveUrl = result.data?.approveUrl;
+      if (approveUrl) {
+        window.location.href = approveUrl;
+      } else {
+        throw new Error("결제 URL을 받지 못했습니다.");
+      }
     } catch (err) {
       console.error("Checkout error:", err);
       alert(`결제 세션 생성에 실패했습니다.\n${err.message || err}`);
@@ -571,6 +615,14 @@ async function checkEnrolled({ uid, courseId, db }) {
   return true;
 }
 
+function pickAccessExpiresAt({ enrolledDocActive, enrolledExpiresAt, inviteUnlocked, categoryPassEntry, subscriptionActive, subscriptionExpiresAt }) {
+  if (inviteUnlocked) return null;
+  if (subscriptionActive) return subscriptionExpiresAt || null;
+  if (categoryPassEntry) return categoryPassEntry.expiresAt || categoryPassEntry || null;
+  if (enrolledDocActive) return enrolledExpiresAt || null;
+  return null;
+}
+
 function getCategoryPassEntry(ent, categoryId) {
   const pass = ent?.categoryPass || {};
   if (!categoryId) return null;
@@ -659,6 +711,7 @@ function normalizeLesson(l, idFallback, orderFallback) {
     id: String(l.id || idFallback || ""),
     order: Number.isFinite(Number(l.order)) ? Number(l.order) : Number(orderFallback || 0),
     title: String(l.title || ""),
+    durationSec: Number(l.durationSec || 0),
     video: l.video || { src: "", poster: "" },
     content: l.content || { overview: "", bullets: [] },
     resources: Array.isArray(l.resources) ? l.resources : [],
@@ -706,23 +759,29 @@ function animateSwap(dir) {
   });
 }
 
-function renderLessonNavMobileChips({ lessons, selectedId, onSelect }) {
+function renderLessonNavMobileChips({ lessons, selectedId, onSelect, locked }) {
   const wrap = $("lessonNavMobile");
   if (!wrap) return;
   wrap.innerHTML = lessons
     .map((l, idx) => {
       const active = l.id === selectedId ? "is-active" : "";
-      const label = l.title || `${idx + 1}강`;
-      return `<button class="lesson-chip ${active}" type="button" data-lesson-id="${esc(l.id)}">${esc(label)}</button>`;
+      const lockClass = locked ? " is-locked" : "";
+      const n = Number.isFinite(Number(l.order)) && Number(l.order) > 0 ? Number(l.order) : idx + 1;
+      const label = `${n}강`;
+      return `<button class="lesson-chip ${active}${lockClass}" type="button" data-lesson-id="${esc(l.id)}" ${
+        locked ? 'disabled aria-disabled="true"' : ""
+      }>${esc(label)}</button>`;
     })
     .join("");
 
-  wrap.querySelectorAll("[data-lesson-id]").forEach((btn) => {
-    btn.addEventListener("click", () => onSelect(btn.getAttribute("data-lesson-id") || "", "next"));
-  });
+  if (!locked) {
+    wrap.querySelectorAll("[data-lesson-id]").forEach((btn) => {
+      btn.addEventListener("click", () => onSelect(btn.getAttribute("data-lesson-id") || "", "next"));
+    });
+  }
 }
 
-function renderLessonOutlineDesktop({ lessons, selectedId, onSelect }) {
+function renderLessonOutlineDesktop({ lessons, selectedId, onSelect, locked }) {
   const wrap = $("lessonOutline");
   const card = $("lessonOutlineCard");
   if (!wrap || !card) return;
@@ -735,11 +794,16 @@ function renderLessonOutlineDesktop({ lessons, selectedId, onSelect }) {
   wrap.innerHTML = lessons
     .map((l, idx) => {
       const active = l.id === selectedId ? "is-active" : "";
-      const title = l.title || `${idx + 1}강`;
+      const lockClass = locked ? "is-locked" : "";
+      const title = String(l.title || "").trim() || `${idx + 1}강`;
+      const dur = formatDurationLabel(l.durationSec);
+      const n = Number.isFinite(Number(l.order)) && Number(l.order) > 0 ? Number(l.order) : idx + 1;
       return `
-        <div class="lesson-outline-item ${active}" role="button" tabindex="0" data-lesson-id="${esc(l.id)}">
-          <div class="lesson-outline-title">${esc(title)}</div>
-          <div class="lesson-outline-sub">레슨 ${idx + 1}</div>
+        <div class="lesson-outline-item ${active} ${lockClass}" role="button" tabindex="0" data-lesson-id="${esc(l.id)}" ${
+          locked ? 'aria-disabled="true"' : ""
+        }>
+          <div class="lesson-outline-title">${esc(`${n}강: ${title}`)}${locked ? ` <span class="muted">🔒</span>` : ""}</div>
+          <div class="lesson-outline-sub">${dur ? esc(`(${dur})`) : ""}</div>
         </div>
       `;
     })
@@ -754,7 +818,9 @@ function renderLessonOutlineDesktop({ lessons, selectedId, onSelect }) {
       }
     });
   };
-  wrap.querySelectorAll("[data-lesson-id]").forEach(bind);
+  if (!locked) {
+    wrap.querySelectorAll("[data-lesson-id]").forEach(bind);
+  }
 }
 
 function updateLessonNow({ lessons, selectedIndex }) {
@@ -843,11 +909,13 @@ async function boot() {
       lessons,
       selectedId,
       onSelect: (id2, dir) => selectLesson(id2, dir),
+      locked: !currentEnrolled,
     });
     renderLessonOutlineDesktop({
       lessons,
       selectedId,
       onSelect: (id2, dir) => selectLesson(id2, dir),
+      locked: !currentEnrolled,
     });
 
     if (lesson) {
@@ -878,9 +946,16 @@ async function boot() {
       // ignore
     }
     if (lastPayRenderCtx) {
+      renderHeader(lastPayRenderCtx.course, {
+        enrolled: lastPayRenderCtx.enrolled,
+        accessBadgeLabel: lastPayRenderCtx.accessLabel,
+        purchaseTerm,
+        accessExpiresAt: lastPayRenderCtx.accessExpiresAt,
+      });
       renderMeta(lastPayRenderCtx.course, {
         enrolled: lastPayRenderCtx.enrolled,
         accessLabel: lastPayRenderCtx.accessLabel,
+        accessExpiresAt: lastPayRenderCtx.accessExpiresAt,
         purchaseMode,
         purchaseTerm,
         onPurchaseModeChange: setPurchaseMode,
@@ -891,6 +966,7 @@ async function boot() {
         user: lastPayRenderCtx.user,
         enrolled: lastPayRenderCtx.enrolled,
         accessBadgeLabel: lastPayRenderCtx.accessLabel,
+        accessExpiresAt: lastPayRenderCtx.accessExpiresAt,
         functions: lastPayRenderCtx.functions,
         purchaseMode,
         purchaseTerm,
@@ -909,9 +985,16 @@ async function boot() {
       // ignore
     }
     if (lastPayRenderCtx) {
+      renderHeader(lastPayRenderCtx.course, {
+        enrolled: lastPayRenderCtx.enrolled,
+        accessBadgeLabel: lastPayRenderCtx.accessLabel,
+        purchaseTerm,
+        accessExpiresAt: lastPayRenderCtx.accessExpiresAt,
+      });
       renderMeta(lastPayRenderCtx.course, {
         enrolled: lastPayRenderCtx.enrolled,
         accessLabel: lastPayRenderCtx.accessLabel,
+        accessExpiresAt: lastPayRenderCtx.accessExpiresAt,
         purchaseMode,
         purchaseTerm,
         onPurchaseModeChange: setPurchaseMode,
@@ -922,6 +1005,7 @@ async function boot() {
         user: lastPayRenderCtx.user,
         enrolled: lastPayRenderCtx.enrolled,
         accessBadgeLabel: lastPayRenderCtx.accessLabel,
+        accessExpiresAt: lastPayRenderCtx.accessExpiresAt,
         functions: lastPayRenderCtx.functions,
         purchaseMode,
         purchaseTerm,
@@ -932,11 +1016,12 @@ async function boot() {
   };
 
   // Default (logged out)
-  lastPayRenderCtx = { course, user: null, enrolled: false, accessLabel: "", functions: null };
-  renderHeader(course, { enrolled: false, accessBadgeLabel: "" });
+  lastPayRenderCtx = { course, user: null, enrolled: false, accessLabel: "", accessExpiresAt: null, functions: null };
+  renderHeader(course, { enrolled: false, accessBadgeLabel: "", purchaseTerm, accessExpiresAt: null });
   renderMeta(course, {
     enrolled: false,
     accessLabel: "",
+    accessExpiresAt: null,
     purchaseMode,
     purchaseTerm,
     onPurchaseModeChange: setPurchaseMode,
@@ -947,6 +1032,7 @@ async function boot() {
     user: null,
     enrolled: false,
     accessBadgeLabel: "",
+    accessExpiresAt: null,
     functions: null,
     purchaseMode,
     purchaseTerm,
@@ -978,11 +1064,12 @@ async function boot() {
     if (!user) {
       currentUser = null;
       currentEnrolled = false;
-      lastPayRenderCtx = { course, user: null, enrolled: false, accessLabel: "", functions: null };
-      renderHeader(course, { enrolled: false, accessBadgeLabel: "" });
+      lastPayRenderCtx = { course, user: null, enrolled: false, accessLabel: "", accessExpiresAt: null, functions: null };
+      renderHeader(course, { enrolled: false, accessBadgeLabel: "", purchaseTerm, accessExpiresAt: null });
       renderMeta(course, {
         enrolled: false,
         accessLabel: "",
+        accessExpiresAt: null,
         purchaseMode,
         purchaseTerm,
         onPurchaseModeChange: setPurchaseMode,
@@ -993,6 +1080,7 @@ async function boot() {
         user: null,
         enrolled: false,
         accessBadgeLabel: "",
+        accessExpiresAt: null,
         functions: null,
         purchaseMode,
         purchaseTerm,
@@ -1026,14 +1114,24 @@ async function boot() {
 
     const finalEnrolled = enrolledDoc || inviteUnlocked || categoryPassActive || subscriptionActive;
     const accessLabel = computeAccessLabel({ enrolledDoc, inviteUnlocked, categoryPassActive, subscriptionActive });
+    const categoryPassEntry = categoryPassActive ? getCategoryPassEntry(ent, course.categoryId) : null;
+    const accessExpiresAt = pickAccessExpiresAt({
+      enrolledDocActive: enrolledDoc,
+      enrolledExpiresAt: null,
+      inviteUnlocked,
+      categoryPassEntry,
+      subscriptionActive,
+      subscriptionExpiresAt: ent.subscriptionExpiresAt,
+    });
 
     currentUser = user;
     currentEnrolled = finalEnrolled;
-    lastPayRenderCtx = { course, user, enrolled: finalEnrolled, accessLabel, functions };
-    renderHeader(course, { enrolled: finalEnrolled, accessBadgeLabel: accessLabel });
+    lastPayRenderCtx = { course, user, enrolled: finalEnrolled, accessLabel, accessExpiresAt, functions };
+    renderHeader(course, { enrolled: finalEnrolled, accessBadgeLabel: accessLabel, purchaseTerm, accessExpiresAt });
     renderMeta(course, {
       enrolled: finalEnrolled,
       accessLabel,
+      accessExpiresAt,
       purchaseMode,
       purchaseTerm,
       onPurchaseModeChange: setPurchaseMode,
@@ -1044,6 +1142,7 @@ async function boot() {
       user,
       enrolled: finalEnrolled,
       accessBadgeLabel: accessLabel,
+      accessExpiresAt,
       functions,
       purchaseMode,
       purchaseTerm,
@@ -1052,6 +1151,61 @@ async function boot() {
     });
     renderAll();
   });
+
+  // PayPal 승인 후 return 처리
+  handlePayPalReturn();
+}
+
+/**
+ * PayPal 결제 승인 후 돌아왔을 때 capture 처리
+ */
+async function handlePayPalReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const paypalStatus = params.get("paypal");
+  const token = params.get("token"); // PayPal orderId
+
+  if (paypalStatus === "return" && token) {
+    // URL 파라미터 제거 (새로고침 중복 방지)
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.delete("paypal");
+    newUrl.searchParams.delete("token");
+    newUrl.searchParams.delete("PayerID");
+    window.history.replaceState({}, "", newUrl);
+
+    try {
+      if (!currentUser) {
+        window.showToast?.("로그인 상태가 아닙니다.");
+        return;
+      }
+
+      window.showToast?.("결제를 처리 중입니다...", "info");
+      const captureOrder = httpsCallable(functions, "capturePayPalOrder");
+      const result = await captureOrder({ orderId: token });
+
+      if (result.data?.alreadyCaptured) {
+        window.showToast?.("이미 처리된 결제입니다.", "success");
+      } else if (result.data?.success) {
+        window.showToast?.("결제가 완료되었습니다. 수강 권한이 부여되었습니다!", "success");
+      } else {
+        window.showToast?.("결제 처리 결과를 확인할 수 없습니다.", "warning");
+      }
+
+      // 권한 다시 로드하기 위해 페이지 새로고침
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (err) {
+      console.error("PayPal capture error:", err);
+      window.showToast?.(`결제 처리 실패: ${err.message || err}`, "error");
+    }
+  } else if (paypalStatus === "cancel") {
+    // 취소 시 파라미터 제거
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.delete("paypal");
+    newUrl.searchParams.delete("token");
+    window.history.replaceState({}, "", newUrl);
+    window.showToast?.("결제가 취소되었습니다.", "warning");
+  }
 }
 
 document.addEventListener("DOMContentLoaded", boot);

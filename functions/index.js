@@ -7,12 +7,18 @@ admin.initializeApp();
 
 const REGION = "asia-northeast3";
 
-// Stripe 키는 Secret Manager로 관리합니다. (Functions v2에서 functions.config() 사용 불가)
+// PayPal 키 (Sandbox/Live 모두 Secret Manager로 관리)
 // 설정:
-// - npx firebase functions:secrets:set STRIPE_SECRET_KEY
-// - npx firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
-const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
-const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
+// - npx firebase functions:secrets:set PAYPAL_CLIENT_ID
+// - npx firebase functions:secrets:set PAYPAL_SECRET
+const PAYPAL_CLIENT_ID = defineSecret("PAYPAL_CLIENT_ID");
+const PAYPAL_SECRET = defineSecret("PAYPAL_SECRET");
+
+// PayPal 환경: sandbox / live (MVP는 sandbox로 시작)
+const PAYPAL_ENV = "sandbox";
+
+// PayPal은 KRW를 지원하지 않음 → USD로 변환 (1 USD ≈ 1350 KRW, 필요시 조정)
+const KRW_TO_USD_RATE = 1350;
 
 function normalizeCode(raw) {
   return String(raw || "")
@@ -206,21 +212,28 @@ exports.redeemInviteCode = onCall({ region: REGION }, async (req) => {
   return result;
 });
 
-// ─── Stripe 결제 ──────────────────────────────────────────────
-
-// 구독 고정 가격(원)
-const SUB_MONTHLY = 99000;
-const SUB_YEARLY = 890000;
+// ─── PayPal 헬퍼 ──────────────────────────────────────────────
+function getPayPalClient() {
+  const paypal = require("@paypal/checkout-server-sdk");
+  const clientId = PAYPAL_CLIENT_ID.value();
+  const clientSecret = PAYPAL_SECRET.value();
+  
+  const environment = PAYPAL_ENV === "live"
+    ? new paypal.core.LiveEnvironment(clientId, clientSecret)
+    : new paypal.core.SandboxEnvironment(clientId, clientSecret);
+  
+  return new paypal.core.PayPalHttpClient(environment);
+}
 
 /**
- * createCheckoutSession (callable)
+ * createPayPalOrder (callable)
  * 클라이언트에서 { plan, courseId } 를 보내면
- * Stripe Checkout Session URL을 만들어 돌려줍니다.
+ * PayPal Order를 생성하고 approveUrl을 반환합니다.
  *
- * plan 종류: "single30" | "single90" | "category30" | "category90" | "sub_monthly" | "sub_yearly"
+ * plan 종류: "single30" | "single90" | "category30" | "category90"
  */
-exports.createCheckoutSession = onCall(
-  { region: REGION, secrets: [STRIPE_SECRET_KEY] },
+exports.createPayPalOrder = onCall(
+  { region: REGION, secrets: [PAYPAL_CLIENT_ID, PAYPAL_SECRET] },
   async (req) => {
     if (!req.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
     if (req.auth.token?.firebase?.sign_in_provider === "anonymous") {
@@ -232,19 +245,15 @@ exports.createCheckoutSession = onCall(
     if (!plan) throw new HttpsError("invalid-argument", "plan이 필요합니다.");
 
     const db = admin.firestore();
-    const stripe = require("stripe")(STRIPE_SECRET_KEY.value());
 
     let amount = 0;
     let description = "";
-    let mode = "payment"; // one-time 결제
-    let priceId = null; // 구독은 Stripe Price ID 사용
     let durationDays = 30;
-    let planType = plan; // 메타데이터에 저장
+    let planType = plan;
     let targetCourseId = courseId || "";
     let targetCategoryId = "";
 
     if (plan.startsWith("single") || plan.startsWith("category")) {
-      // 단품/카테고리: 강의 문서에서 pricing 읽기
       if (!courseId) throw new HttpsError("invalid-argument", "courseId가 필요합니다.");
       const courseSnap = await db.doc(`courses/${courseId}`).get();
       if (!courseSnap.exists) throw new HttpsError("not-found", "강의를 찾을 수 없습니다.");
@@ -272,156 +281,140 @@ exports.createCheckoutSession = onCall(
       }
 
       if (!amount || amount <= 0) throw new HttpsError("failed-precondition", "가격이 설정되지 않았습니다.");
-    } else if (plan === "sub_monthly") {
-      amount = SUB_MONTHLY;
-      description = "월 구독 (전체 강의)";
-      mode = "subscription";
-    } else if (plan === "sub_yearly") {
-      amount = SUB_YEARLY;
-      description = "연 구독 (전체 강의)";
-      mode = "subscription";
     } else {
       throw new HttpsError("invalid-argument", "알 수 없는 plan입니다.");
     }
 
-    // Stripe Checkout Session 파라미터 생성
     const baseUrl = req.rawRequest?.headers?.origin || "https://aiacademy-36b79.web.app";
-    const successUrl = `${baseUrl}/lesson.html?id=${targetCourseId}&payment=success`;
-    const cancelUrl = `${baseUrl}/lesson.html?id=${targetCourseId}&payment=cancel`;
+    const returnUrl = `${baseUrl}/lesson.html?id=${targetCourseId}&paypal=return`;
+    const cancelUrl = `${baseUrl}/lesson.html?id=${targetCourseId}&paypal=cancel`;
 
-    const metadata = {
-      uid,
-      plan: planType,
-      courseId: targetCourseId,
-      categoryId: targetCategoryId,
-      durationDays: String(durationDays),
-    };
+    const paypal = require("@paypal/checkout-server-sdk");
+    const client = getPayPalClient();
 
-    let sessionParams;
-    if (mode === "subscription") {
-      // 구독: Stripe Price를 동적 생성(ad-hoc price)
-      sessionParams = {
-        mode: "subscription",
-        customer_email: req.auth.token?.email || undefined,
-        line_items: [
-          {
-            price_data: {
-              currency: "krw",
-              product_data: { name: description },
-              unit_amount: amount, // KRW는 소수점 없음
-              recurring: {
-                interval: plan === "sub_yearly" ? "year" : "month",
-              },
-            },
-            quantity: 1,
+    // PayPal은 KRW 미지원 → USD로 변환 (소수 2자리)
+    const amountUsd = Math.max(0.01, Math.round((amount / KRW_TO_USD_RATE) * 100) / 100);
+
+    const request = new paypal.orders.OrdersCreateRequest();
+    request.prefer("return=representation");
+    request.requestBody({
+      intent: "CAPTURE",
+      purchase_units: [
+        {
+          description: `${description} (${amount.toLocaleString()}원)`,
+          amount: {
+            currency_code: "USD",
+            value: String(amountUsd.toFixed(2)),
           },
-        ],
-        subscription_data: { metadata },
-        success_url: successUrl,
+          custom_id: uid,
+        },
+      ],
+      application_context: {
+        brand_name: "김지백 AI경영아카데미",
+        locale: "ko-KR",
+        landing_page: "BILLING",
+        shipping_preference: "NO_SHIPPING",
+        user_action: "PAY_NOW",
+        return_url: returnUrl,
         cancel_url: cancelUrl,
-        metadata,
-      };
-    } else {
-      // 단건 결제
-      sessionParams = {
-        mode: "payment",
-        customer_email: req.auth.token?.email || undefined,
-        line_items: [
-          {
-            price_data: {
-              currency: "krw",
-              product_data: { name: description },
-              unit_amount: amount,
-            },
-            quantity: 1,
-          },
-        ],
-        payment_intent_data: { metadata },
-        success_url: successUrl,
-        cancel_url: cancelUrl,
-        metadata,
-      };
+      },
+    });
+
+    try {
+      const response = await client.execute(request);
+      const orderId = response.result.id;
+      const approveLink = response.result.links.find((link) => link.rel === "approve");
+      const approveUrl = approveLink?.href || "";
+
+      if (!approveUrl) throw new Error("PayPal approve URL을 받지 못했습니다.");
+
+      // 결제 기록 선기록 (멱등성/추적용, 원래 원화 금액 보존)
+      await db.collection("payments").doc(orderId).set({
+        provider: "paypal",
+        paypalOrderId: orderId,
+        uid,
+        plan: planType,
+        courseId: targetCourseId || null,
+        categoryId: targetCategoryId || null,
+        amount,
+        amountKrw: amount,
+        currency: "USD",
+        amountUsd,
+        durationDays,
+        status: "created",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`PayPal order created: orderId=${orderId}, uid=${uid}, plan=${plan}`);
+      return { orderId, approveUrl };
+    } catch (err) {
+      console.error("PayPal order creation failed:", err);
+      throw new HttpsError("internal", `PayPal 주문 생성 실패: ${err.message || err}`);
     }
-
-    const session = await stripe.checkout.sessions.create(sessionParams);
-
-    return { url: session.url };
   },
 );
 
 /**
- * stripeWebhook (HTTP endpoint)
- * Stripe에서 결제 완료(checkout.session.completed) 이벤트를 보내면
- * users/{uid}/enrollments/{courseId} 문서를 생성해 수강 권한을 부여합니다.
+ * capturePayPalOrder (callable)
+ * 사용자가 승인 완료 후 프론트에서 orderId를 보내면
+ * PayPal capture를 실행하고 권한을 부여합니다.
  */
-exports.stripeWebhook = onRequest(
-  {
-    region: REGION,
-    secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET],
-    // Stripe webhook은 raw body가 필요
-    invoker: "public",
-  },
-  async (req, res) => {
-    if (req.method !== "POST") {
-      res.status(405).send("Method Not Allowed");
-      return;
-    }
+exports.capturePayPalOrder = onCall(
+  { region: REGION, secrets: [PAYPAL_CLIENT_ID, PAYPAL_SECRET] },
+  async (req) => {
+    if (!req.auth) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-    const stripe = require("stripe")(STRIPE_SECRET_KEY.value());
-    const sig = req.headers["stripe-signature"];
-
-    let event;
-    try {
-      event = stripe.webhooks.constructEvent(
-        req.rawBody,
-        sig,
-        STRIPE_WEBHOOK_SECRET.value(),
-      );
-    } catch (err) {
-      console.error("Webhook signature verification failed.", err.message);
-      res.status(400).send(`Webhook Error: ${err.message}`);
-      return;
-    }
+    const uid = req.auth.uid;
+    const { orderId } = req.data || {};
+    if (!orderId) throw new HttpsError("invalid-argument", "orderId가 필요합니다.");
 
     const db = admin.firestore();
+    const paymentRef = db.collection("payments").doc(orderId);
+    const paymentSnap = await paymentRef.get();
 
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      const meta = session.metadata || {};
-      const uid = meta.uid;
-      const plan = meta.plan;
-      const courseId = meta.courseId;
-      const categoryId = meta.categoryId;
-      const durationDays = Number(meta.durationDays || 30);
+    if (!paymentSnap.exists) {
+      throw new HttpsError("not-found", "결제 기록을 찾을 수 없습니다.");
+    }
 
-      if (!uid) {
-        console.error("No uid in metadata", meta);
-        res.status(200).send("OK (no uid)");
-        return;
+    const payment = paymentSnap.data();
+    if (payment.uid !== uid) {
+      throw new HttpsError("permission-denied", "본인 결제만 처리할 수 있습니다.");
+    }
+
+    // 이미 처리된 경우 재처리 방지(멱등)
+    if (payment.status === "captured") {
+      console.log(`Order already captured: orderId=${orderId}`);
+      return { alreadyCaptured: true };
+    }
+
+    const paypal = require("@paypal/checkout-server-sdk");
+    const client = getPayPalClient();
+    const request = new paypal.orders.OrdersCaptureRequest(orderId);
+    request.requestBody({});
+
+    try {
+      const response = await client.execute(request);
+      const captureData = response.result;
+      
+      if (captureData.status !== "COMPLETED") {
+        throw new Error(`PayPal capture 상태가 COMPLETED가 아닙니다: ${captureData.status}`);
       }
+
+      const captureId = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.id || "";
+      const capturedAmount = Number(captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || 0);
+
+      // 권한 부여(기존 Stripe webhook 로직 재사용)
+      const plan = payment.plan;
+      const courseId = payment.courseId;
+      const categoryId = payment.categoryId;
+      const durationDays = Number(payment.durationDays || 30);
 
       const now = admin.firestore.Timestamp.now();
       const expiresAt = admin.firestore.Timestamp.fromMillis(
         now.toMillis() + durationDays * 24 * 60 * 60 * 1000,
       );
 
-      if (plan === "sub_monthly" || plan === "sub_yearly") {
-        // 구독: 전체 강의 오픈 → users/{uid}.entitlements.subscriptionActive = true
-        await db.doc(`users/${uid}`).set(
-          {
-            entitlements: {
-              subscriptionActive: true,
-              subscriptionPlan: plan,
-              subscriptionStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-              subscriptionExpiresAt: expiresAt,
-            },
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        );
-        console.log(`Subscription activated: uid=${uid}, plan=${plan}`);
-      } else if (plan === "category30" || plan === "category90") {
-        // 카테고리: entitlements.categoryPass.{categoryId} = { expiresAt, ... } 로 1회 저장
+      if (plan === "category30" || plan === "category90") {
         if (categoryId) {
           await db.doc(`users/${uid}`).set(
             {
@@ -431,7 +424,8 @@ exports.stripeWebhook = onRequest(
                     expiresAt,
                     plan,
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    stripeSessionId: session.id,
+                    paypalOrderId: orderId,
+                    paypalCaptureId: captureId,
                   },
                 },
               },
@@ -442,14 +436,14 @@ exports.stripeWebhook = onRequest(
           console.log(`Category pass activated: uid=${uid}, category=${categoryId}, plan=${plan}`);
         }
       } else if (plan === "single30" || plan === "single90") {
-        // 단품: 해당 강의만 enrollment
         if (courseId) {
           await db.doc(`users/${uid}/enrollments/${courseId}`).set(
             {
               enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
               expiresAt,
               plan,
-              stripeSessionId: session.id,
+              paypalOrderId: orderId,
+              paypalCaptureId: captureId,
             },
             { merge: true },
           );
@@ -457,23 +451,35 @@ exports.stripeWebhook = onRequest(
         }
       }
 
-      // 결제 기록 저장
-      await db.collection("payments").add({
-        uid,
-        plan,
-        courseId: courseId || null,
-        categoryId: categoryId || null,
-        amount: session.amount_total,
-        currency: session.currency,
-        stripeSessionId: session.id,
-        stripePaymentIntent: session.payment_intent || null,
-        stripeSubscription: session.subscription || null,
-        status: session.payment_status,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
+      // 결제 기록 업데이트
+      await paymentRef.set(
+        {
+          status: "captured",
+          paypalCaptureId: captureId,
+          capturedAmount,
+          capturedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
 
-    res.status(200).json({ received: true });
+      console.log(`PayPal order captured: orderId=${orderId}, captureId=${captureId}, uid=${uid}`);
+      return { success: true, captureId };
+    } catch (err) {
+      console.error("PayPal capture failed:", err);
+      
+      // 실패 상태로 기록
+      await paymentRef.set(
+        {
+          status: "failed",
+          failedAt: admin.firestore.FieldValue.serverTimestamp(),
+          failureReason: String(err.message || err),
+        },
+        { merge: true },
+      );
+
+      throw new HttpsError("internal", `결제 처리 실패: ${err.message || err}`);
+    }
   },
 );
 

@@ -635,6 +635,17 @@ a {
   background: rgba(255, 79, 216, 0.12);
 }
 
+.lesson-chip.is-locked {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.lesson-chip.is-locked:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: none;
+}
+
 .lesson-outline {
   margin-top: 14px;
 }
@@ -665,6 +676,16 @@ a {
   background: rgba(138, 92, 255, 0.12);
 }
 
+.lesson-outline-item.is-locked {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.lesson-outline-item.is-locked:hover {
+  background: rgba(0, 0, 0, 0.12);
+  transform: none;
+}
+
 .lesson-outline-title {
   font-weight: 900;
   font-size: 1.02rem;
@@ -676,6 +697,35 @@ a {
   color: rgba(255, 255, 255, 0.72);
   font-size: 0.95rem;
   line-height: 1.55;
+}
+
+.lesson-admin-table {
+  display: grid;
+  gap: 10px;
+}
+
+.lesson-admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.lesson-admin-main {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.lesson-admin-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .lesson-anim {

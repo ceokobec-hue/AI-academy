@@ -161,11 +161,14 @@ async function boot() {
       btn.textContent = "결제 준비 중…";
 
       try {
-        const createCheckout = httpsCallable(functions, "createCheckoutSession");
-        const result = await createCheckout({ plan, courseId });
-        const url = result.data?.url;
-        if (url) window.location.href = url;
-        else throw new Error("결제 URL을 받지 못했습니다.");
+        const createOrder = httpsCallable(functions, "createPayPalOrder");
+        const result = await createOrder({ plan, courseId });
+        const approveUrl = result.data?.approveUrl;
+        if (approveUrl) {
+          window.location.href = approveUrl;
+        } else {
+          throw new Error("결제 URL을 받지 못했습니다.");
+        }
       } catch (err) {
         console.error(err);
         alert(`결제 세션 생성에 실패했습니다.\n${err.message || err}`);

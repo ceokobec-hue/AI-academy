@@ -6,6 +6,7 @@ import {
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -15,6 +16,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 import {
   getDownloadURL,
@@ -52,6 +54,124 @@ function ensureFirebase() {
 
 function $(id) {
   return document.getElementById(id);
+}
+
+function formatDurationLabel(seconds) {
+  const s = Number(seconds || 0);
+  if (!Number.isFinite(s) || s <= 0) return "";
+  const m = Math.max(1, Math.round(s / 60));
+  if (m < 60) return `${m}분`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return mm ? `${h}시간 ${mm}분` : `${h}시간`;
+}
+
+function extractVideoDurationSec(url, { timeoutMs = 20000 } = {}) {
+  const src = String(url || "").trim();
+  if (!src) return Promise.resolve(0);
+  return new Promise((resolve, reject) => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.muted = true;
+    v.playsInline = true;
+    v.crossOrigin = "anonymous";
+
+    let done = false;
+    const cleanup = () => {
+      try {
+        v.removeAttribute("src");
+        v.load();
+      } catch {
+        // ignore
+      }
+    };
+
+    const t = window.setTimeout(() => {
+      if (done) return;
+      done = true;
+      cleanup();
+      reject(new Error("영상 메타데이터 로딩 시간이 초과되었습니다."));
+    }, timeoutMs);
+
+    v.addEventListener("loadedmetadata", () => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(t);
+      const dur = Number(v.duration || 0);
+      cleanup();
+      if (!Number.isFinite(dur) || dur <= 0) {
+        reject(new Error("영상 길이를 읽지 못했습니다. (URL/CORS/권한/형식 확인)"));
+        return;
+      }
+      resolve(Math.round(dur));
+    });
+
+    v.addEventListener("error", () => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(t);
+      cleanup();
+      reject(new Error("영상 로딩에 실패했습니다. (URL/CORS/권한 확인)"));
+    });
+
+    v.src = src;
+  });
+}
+
+function extractVideoDurationSecFromFile(file, { timeoutMs = 20000 } = {}) {
+  if (!file) return Promise.resolve(0);
+  return new Promise((resolve, reject) => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.muted = true;
+    v.playsInline = true;
+
+    let done = false;
+    const objectUrl = URL.createObjectURL(file);
+    const cleanup = () => {
+      try {
+        URL.revokeObjectURL(objectUrl);
+      } catch {
+        // ignore
+      }
+      try {
+        v.removeAttribute("src");
+        v.load();
+      } catch {
+        // ignore
+      }
+    };
+
+    const t = window.setTimeout(() => {
+      if (done) return;
+      done = true;
+      cleanup();
+      reject(new Error("영상 메타데이터 로딩 시간이 초과되었습니다."));
+    }, timeoutMs);
+
+    v.addEventListener("loadedmetadata", () => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(t);
+      const dur = Number(v.duration || 0);
+      cleanup();
+      if (!Number.isFinite(dur) || dur <= 0) {
+        reject(new Error("영상 길이를 읽지 못했습니다. (파일 형식 확인)"));
+        return;
+      }
+      resolve(Math.round(dur));
+    });
+
+    v.addEventListener("error", () => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(t);
+      cleanup();
+      reject(new Error("영상 로딩에 실패했습니다. (파일 형식 확인)"));
+    });
+
+    v.src = objectUrl;
+  });
 }
 
 function setStatus(el, text, tone = "info") {
@@ -187,11 +307,32 @@ async function boot() {
   const resultEl = $("adminResult");
   const deleteBtn = $("btnSoftDelete");
   const categorySelect = $("categoryId");
+  const catManageIdEl = $("catManageId");
+  const catManageNameEl = $("catManageName");
+  const catManageOrderEl = $("catManageOrder");
+  const catManageMsgEl = $("catManageMsg");
+  const catOrderListEl = $("catOrderList");
+  const catOrderMsgEl = $("catOrderMsg");
+  const btnCatLoadFromSelect = $("btnCatLoadFromSelect");
+  const btnCatSave = $("btnCatSave");
   const price30El = $("priceKrw");
   const price90El = $("priceKrw90");
   const cat30El = $("catPrice30");
   const cat90El = $("catPrice90");
   const saveCatDefaultsEl = $("saveCategoryPricingDefaults");
+  const lessonFieldset = $("lessonAdminFieldset");
+  const lessonListEl = $("lessonAdminList");
+  const lessonOrderEl = $("lessonOrder");
+  const lessonTitleEl = $("lessonTitle");
+  const lessonVideoUrlEl = $("lessonVideoUrl");
+  const lessonVideoFileEl = $("lessonVideoFile");
+  const lessonVideoProgressEl = $("lessonVideoProgress");
+  const lessonDurationSecEl = $("lessonDurationSec");
+  const lessonDurationHintEl = $("lessonDurationHint");
+  const lessonAdminMsgEl = $("lessonAdminMsg");
+  const btnLessonAutoDuration = $("btnLessonAutoDuration");
+  const btnLessonSave = $("btnLessonSave");
+  const btnLessonReset = $("btnLessonReset");
 
   if (!fb) {
     setWarn("Firebase 설정이 없거나 storageBucket이 비어있습니다. firebase-config.js를 확인해 주세요.");
@@ -201,8 +342,116 @@ async function boot() {
   }
 
   const { auth, db, storage } = fb;
-  const categories = await fetchCategories(db);
+  let categories = await fetchCategories(db);
   fillCategorySelect(categorySelect, categories);
+
+  let lessonEditId = "";
+
+  function setLessonMsg(text, tone = "muted") {
+    if (!lessonAdminMsgEl) return;
+    lessonAdminMsgEl.textContent = text;
+    lessonAdminMsgEl.style.color =
+      tone === "error"
+        ? "rgba(255, 140, 140, 0.95)"
+        : tone === "success"
+          ? "rgba(120, 255, 190, 0.95)"
+          : "rgba(255, 255, 255, 0.7)";
+  }
+
+  function resetLessonForm() {
+    lessonEditId = "";
+    if (lessonOrderEl) lessonOrderEl.value = "";
+    if (lessonTitleEl) lessonTitleEl.value = "";
+    if (lessonVideoUrlEl) lessonVideoUrlEl.value = "";
+    if (lessonVideoFileEl) lessonVideoFileEl.value = "";
+    if (lessonVideoProgressEl) lessonVideoProgressEl.value = 0;
+    if (lessonDurationSecEl) lessonDurationSecEl.value = "";
+    if (lessonDurationHintEl) lessonDurationHintEl.textContent = "";
+    setLessonMsg("");
+    if (btnLessonSave) btnLessonSave.textContent = "레슨 저장(추가/수정)";
+  }
+
+  async function loadLessons(courseId) {
+    if (!lessonListEl) return;
+    if (!courseId) {
+      lessonListEl.innerHTML = `<p class="muted" style="margin:0;">courseId가 없습니다. 먼저 강의를 저장한 뒤 수정 모드로 들어와 주세요.</p>`;
+      return;
+    }
+    try {
+      const q = query(collection(db, "courses", courseId, "lessons"), orderBy("order", "asc"));
+      const snap = await getDocs(q);
+      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
+      if (!list.length) {
+        lessonListEl.innerHTML = `<p class="muted" style="margin:0;">아직 레슨이 없습니다. 위에서 추가해 주세요.</p>`;
+        return;
+      }
+      lessonListEl.innerHTML = `
+        <div class="lesson-admin-table">
+          ${list
+            .map((l, idx) => {
+              const order = Number(l.order || idx + 1);
+              const title = String(l.title || "").trim() || `${order}강`;
+              const url = String(l.video?.src || l.videoSrc || "");
+              const dur = Number(l.durationSec || 0);
+              const durLabel = formatDurationLabel(dur);
+              const safeUrl = url ? `<a class="link" href="${url}" target="_blank" rel="noopener noreferrer">열기</a>` : `<span class="muted">-</span>`;
+              return `
+                <div class="lesson-admin-row">
+                  <div class="lesson-admin-main">
+                    <div style="font-weight:900;">${order}강: ${title} ${durLabel ? `<span class="muted">(${durLabel})</span>` : ""}</div>
+                    <div class="muted" style="word-break:break-all;">${safeUrl} <span class="muted">· id: ${l.id}</span></div>
+                  </div>
+                  <div class="lesson-admin-actions">
+                    <button class="btn btn-ghost btn-sm" type="button" data-lesson-edit="${l.id}">수정</button>
+                    <button class="btn btn-danger btn-sm" type="button" data-lesson-del="${l.id}">삭제</button>
+                  </div>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+      `;
+
+      lessonListEl.querySelectorAll("[data-lesson-edit]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-lesson-edit") || "";
+          const item = list.find((x) => x.id === id);
+          if (!item) return;
+          lessonEditId = id;
+          if (lessonOrderEl) lessonOrderEl.value = String(Number(item.order || 1));
+          if (lessonTitleEl) lessonTitleEl.value = String(item.title || "");
+          if (lessonVideoUrlEl) lessonVideoUrlEl.value = String(item.video?.src || item.videoSrc || "");
+          const dur = Number(item.durationSec || 0);
+          if (lessonDurationSecEl) lessonDurationSecEl.value = dur > 0 ? String(dur) : "";
+          if (lessonDurationHintEl) lessonDurationHintEl.textContent = dur > 0 ? `표시: ${formatDurationLabel(dur)}` : "";
+          if (btnLessonSave) btnLessonSave.textContent = "레슨 저장(수정)";
+          setLessonMsg(`수정 모드: ${id}`);
+          window.scrollTo({ top: lessonFieldset?.offsetTop || 0, behavior: "smooth" });
+        });
+      });
+
+      lessonListEl.querySelectorAll("[data-lesson-del]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-lesson-del") || "";
+          if (!id) return;
+          const ok = window.confirm("이 레슨을 삭제할까요? (복구 불가)");
+          if (!ok) return;
+          try {
+            await deleteDoc(doc(db, "courses", courseId, "lessons", id));
+            setLessonMsg("레슨 삭제 완료", "success");
+            await loadLessons(courseId);
+            if (lessonEditId === id) resetLessonForm();
+          } catch (e) {
+            console.error(e);
+            setLessonMsg(`삭제 실패: ${e?.message || "알 수 없는 오류"}`, "error");
+          }
+        });
+      });
+    } catch (e) {
+      console.error(e);
+      lessonListEl.innerHTML = `<p class="muted" style="margin:0;">레슨을 불러오지 못했습니다: ${e?.message || "오류"}</p>`;
+    }
+  }
 
   async function applyCategoryPricingDefaultsIfNeeded() {
     const categoryId = String(categorySelect?.value || "").trim();
@@ -259,6 +508,159 @@ async function boot() {
     });
   }
 
+  function setCatManageMsg(text, tone = "muted") {
+    if (!catManageMsgEl) return;
+    catManageMsgEl.textContent = text;
+    catManageMsgEl.style.color =
+      tone === "error"
+        ? "rgba(255, 140, 140, 0.95)"
+        : tone === "success"
+          ? "rgba(120, 255, 190, 0.95)"
+          : "rgba(255, 255, 255, 0.7)";
+  }
+
+  function setCatOrderMsg(text, tone = "muted") {
+    if (!catOrderMsgEl) return;
+    catOrderMsgEl.textContent = text;
+    catOrderMsgEl.style.color =
+      tone === "error"
+        ? "rgba(255, 140, 140, 0.95)"
+        : tone === "success"
+          ? "rgba(120, 255, 190, 0.95)"
+          : "rgba(255, 255, 255, 0.7)";
+  }
+
+  async function upsertCategory({ id, name, order }) {
+    const catId = String(id || "").trim();
+    const catName = String(name || "").trim();
+    const catOrder = Number(order || 0);
+    if (!catId) throw new Error("카테고리 ID가 필요합니다.");
+    if (!catName) throw new Error("카테고리 이름이 필요합니다.");
+    if (!Number.isFinite(catOrder) || catOrder <= 0) throw new Error("정렬 순서(order)는 1 이상의 숫자여야 합니다.");
+
+    const ref = doc(db, "categories", catId);
+    const snap = await getDoc(ref);
+    const payload = {
+      name: catName,
+      order: Math.round(catOrder),
+      updatedAt: serverTimestamp(),
+    };
+    if (!snap.exists()) payload.createdAt = serverTimestamp();
+    await setDoc(ref, payload, { merge: true });
+  }
+
+  async function ensureDefaultCategories() {
+    // Firestore에 categories가 일부만 있으면, catalog.js가 Firestore 목록만 사용해서
+    // 화면에 그 일부만 보이게 됩니다. 따라서 기본 카테고리 세트를 항상 맞춰둡니다.
+    const defaults = (Array.isArray(DEFAULT_CATEGORIES) ? DEFAULT_CATEGORIES : []).slice();
+    if (!defaults.length) return;
+
+    for (const c of defaults) {
+      try {
+        const ref = doc(db, "categories", String(c.id || "").trim());
+        const snap = await getDoc(ref);
+        if (snap.exists()) continue; // 이미 있으면 덮어쓰지 않음(관리자가 order를 바꿀 수 있어야 함)
+        await setDoc(
+          ref,
+          {
+            name: String(c.name || "").trim(),
+            order: Number(c.order || 0) || 1,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      } catch (e) {
+        console.warn("Failed to ensure default category:", c?.id, e);
+      }
+    }
+  }
+
+  function renderCategoryOrderList() {
+    if (!catOrderListEl) return;
+    const list = (Array.isArray(categories) ? categories : [])
+      .slice()
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    if (!list.length) {
+      catOrderListEl.innerHTML = `<p class="muted" style="margin:0;">카테고리가 없습니다.</p>`;
+      return;
+    }
+
+    catOrderListEl.innerHTML = `
+      <div class="lesson-admin-table">
+        ${list
+          .map((c, idx) => {
+            const isFirst = idx === 0;
+            const isLast = idx === list.length - 1;
+            const order = Number(c.order || idx + 1);
+            const name = String(c.name || "").trim() || c.id;
+            return `
+              <div class="lesson-admin-row">
+                <div class="lesson-admin-main">
+                  <div style="font-weight:900;">${order}. ${name}</div>
+                  <div class="muted">id: ${String(c.id || "")}</div>
+                </div>
+                <div class="lesson-admin-actions">
+                  <button class="btn btn-ghost btn-sm" type="button" data-cat-move="up" data-cat-id="${String(
+                    c.id || "",
+                  )}" ${isFirst ? "disabled" : ""}>↑</button>
+                  <button class="btn btn-ghost btn-sm" type="button" data-cat-move="down" data-cat-id="${String(
+                    c.id || "",
+                  )}" ${isLast ? "disabled" : ""}>↓</button>
+                </div>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
+  }
+
+  async function moveCategoryOrder({ id, dir }) {
+    const list = (Array.isArray(categories) ? categories : [])
+      .slice()
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const idx = list.findIndex((c) => String(c.id) === String(id));
+    if (idx < 0) return;
+    const otherIdx = dir === "up" ? idx - 1 : idx + 1;
+    if (otherIdx < 0 || otherIdx >= list.length) return;
+
+    const a = list[idx];
+    const b = list[otherIdx];
+    const aRef = doc(db, "categories", a.id);
+    const bRef = doc(db, "categories", b.id);
+    const aOrder = Number(a.order || 0) || idx + 1;
+    const bOrder = Number(b.order || 0) || otherIdx + 1;
+
+    const batch = writeBatch(db);
+    batch.update(aRef, { order: bOrder, updatedAt: serverTimestamp() });
+    batch.update(bRef, { order: aOrder, updatedAt: serverTimestamp() });
+    await batch.commit();
+  }
+
+  async function reloadCategoriesAndSelect(idToSelect = "") {
+    categories = await fetchCategories(db);
+    fillCategorySelect(categorySelect, categories);
+    renderCategoryOrderList();
+    if (idToSelect) {
+      try {
+        categorySelect.value = idToSelect;
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  function loadManageFormFromSelected() {
+    const id = String(categorySelect?.value || "").trim();
+    const item = categories.find((c) => String(c.id) === id) || null;
+    if (catManageIdEl) catManageIdEl.value = id || "";
+    if (catManageNameEl) catManageNameEl.value = item?.name || "";
+    if (catManageOrderEl) catManageOrderEl.value = item?.order ? String(item.order) : "";
+    setCatManageMsg(id ? `불러옴: ${id}` : "");
+  }
+
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
       setWarn("로그인이 필요합니다.");
@@ -285,6 +687,70 @@ async function boot() {
 
     gate.style.display = "none";
     form.style.display = "block";
+
+    // 기본 카테고리 세트 Firestore에 자동 복구/동기화
+    try {
+      await ensureDefaultCategories();
+      await reloadCategoriesAndSelect(String(categorySelect?.value || "").trim());
+      setCatManageMsg("기본 카테고리를 Firestore에 동기화했습니다.", "success");
+    } catch (e) {
+      console.warn("Failed to ensure default categories exist.", e);
+    }
+
+    // 카테고리 관리 UI wiring
+    if (catOrderListEl && catOrderListEl.dataset.wired !== "true") {
+      catOrderListEl.dataset.wired = "true";
+      catOrderListEl.addEventListener("click", async (e) => {
+        const btn = e.target?.closest?.("button[data-cat-move][data-cat-id]");
+        if (!btn) return;
+        const dir = btn.getAttribute("data-cat-move") || "";
+        const id = btn.getAttribute("data-cat-id") || "";
+        if (!id || (dir !== "up" && dir !== "down")) return;
+
+        btn.disabled = true;
+        setCatOrderMsg("순서 변경 중…");
+        try {
+          await moveCategoryOrder({ id, dir });
+          await reloadCategoriesAndSelect(String(categorySelect?.value || "").trim());
+          loadManageFormFromSelected();
+          setCatOrderMsg("순서를 변경했습니다.", "success");
+        } catch (err) {
+          console.error(err);
+          setCatOrderMsg(`순서 변경 실패: ${String(err?.message || err)}`, "error");
+        }
+      });
+    }
+
+    btnCatLoadFromSelect?.addEventListener("click", () => {
+      loadManageFormFromSelected();
+    });
+    btnCatSave?.addEventListener("click", async () => {
+      if (!btnCatSave) return;
+      btnCatSave.disabled = true;
+      const prev = btnCatSave.textContent;
+      btnCatSave.textContent = "저장 중…";
+      try {
+        const id = String(catManageIdEl?.value || "").trim();
+        const name = String(catManageNameEl?.value || "").trim();
+        const order = Number(catManageOrderEl?.value || 0);
+        await upsertCategory({ id, name, order });
+        await reloadCategoriesAndSelect(id);
+        setCatManageMsg(`저장 완료: ${id}`, "success");
+      } catch (e) {
+        console.error(e);
+        setCatManageMsg(`저장 실패: ${String(e?.message || e)}`, "error");
+      } finally {
+        btnCatSave.disabled = false;
+        btnCatSave.textContent = prev || "카테고리 저장(추가/수정)";
+      }
+    });
+
+    // 최초 1회: 선택된 카테고리 값을 관리폼에 채우기
+    try {
+      loadManageFormFromSelected();
+    } catch {
+      // ignore
+    }
 
     // Edit mode
     const editId = getCourseIdFromUrl();
@@ -345,6 +811,114 @@ async function boot() {
     } else {
       if (deleteBtn) deleteBtn.style.display = "none";
     }
+
+    // 레슨 관리(목차) - 수정 모드에서만 활성
+    if (lessonFieldset) {
+      lessonFieldset.style.display = editId ? "" : "none";
+    }
+    if (editId) {
+      resetLessonForm();
+      await loadLessons(editId);
+    }
+
+    btnLessonReset?.addEventListener("click", () => resetLessonForm());
+    btnLessonAutoDuration?.addEventListener("click", async () => {
+      const url = String(lessonVideoUrlEl?.value || "").trim();
+      const file = lessonVideoFileEl?.files?.[0] || null;
+      if (!url && !file) {
+        setLessonMsg("영상 URL을 입력하거나 파일을 선택해 주세요.", "error");
+        return;
+      }
+      setLessonMsg("영상 길이 계산 중...", "muted");
+      try {
+        const sec = file ? await extractVideoDurationSecFromFile(file) : await extractVideoDurationSec(url);
+        if (lessonDurationSecEl) lessonDurationSecEl.value = String(sec);
+        if (lessonDurationHintEl) lessonDurationHintEl.textContent = `표시: ${formatDurationLabel(sec)}`;
+        setLessonMsg("자동 계산 완료", "success");
+      } catch (e) {
+        console.error(e);
+        if (lessonDurationSecEl) lessonDurationSecEl.value = "";
+        if (lessonDurationHintEl) lessonDurationHintEl.textContent = "";
+        setLessonMsg(e?.message || "자동 계산 실패", "error");
+      }
+    });
+
+    btnLessonSave?.addEventListener("click", async () => {
+      const courseId = String(getCourseIdFromUrl() || "").trim();
+      if (!courseId) {
+        setLessonMsg("수정 모드에서만 레슨을 저장할 수 있습니다.", "error");
+        return;
+      }
+      const order = Number(lessonOrderEl?.value || 0);
+      const title = String(lessonTitleEl?.value || "").trim();
+      let videoUrl = String(lessonVideoUrlEl?.value || "").trim();
+      const videoFile = lessonVideoFileEl?.files?.[0] || null;
+      let durationSec = Number(lessonDurationSecEl?.value || 0);
+
+      if (!Number.isFinite(order) || order < 1) {
+        setLessonMsg("순서(order)는 1 이상의 숫자여야 합니다.", "error");
+        return;
+      }
+      if (!title) {
+        setLessonMsg("소제목(레슨 제목)을 입력해 주세요.", "error");
+        return;
+      }
+      if (!videoUrl && !videoFile) {
+        setLessonMsg("영상 URL을 입력하거나 파일을 선택해 주세요.", "error");
+        return;
+      }
+
+      btnLessonSave.disabled = true;
+      setLessonMsg("레슨 저장 중...", "muted");
+
+      try {
+        const col = collection(db, "courses", courseId, "lessons");
+        const ref = lessonEditId ? doc(db, "courses", courseId, "lessons", lessonEditId) : doc(col);
+        const now = serverTimestamp();
+
+        // 1) 파일 업로드가 있으면 먼저 업로드해서 URL 확보
+        if (videoFile) {
+          if (lessonVideoProgressEl) lessonVideoProgressEl.value = 0;
+          const ext = extFromName(videoFile.name) || ".mp4";
+          const uploadedUrl = await uploadFile({
+            storage,
+            path: `courses/${courseId}/lessons/${ref.id}/video${ext}`,
+            file: videoFile,
+            onProgress: (pct) => (lessonVideoProgressEl ? (lessonVideoProgressEl.value = pct) : undefined),
+          });
+          videoUrl = uploadedUrl;
+          if (lessonVideoUrlEl) lessonVideoUrlEl.value = uploadedUrl;
+        }
+
+        // 2) 길이 자동 계산(없을 때만)
+        if (!Number.isFinite(durationSec) || durationSec <= 0) {
+          durationSec = videoFile
+            ? await extractVideoDurationSecFromFile(videoFile)
+            : await extractVideoDurationSec(videoUrl);
+          if (lessonDurationSecEl) lessonDurationSecEl.value = String(durationSec);
+          if (lessonDurationHintEl) lessonDurationHintEl.textContent = `표시: ${formatDurationLabel(durationSec)}`;
+        }
+
+        const payload = {
+          order: Math.round(order),
+          title,
+          video: { src: videoUrl },
+          durationSec: Math.round(durationSec),
+          updatedAt: now,
+        };
+        if (!lessonEditId) payload.createdAt = now;
+
+        await setDoc(ref, payload, { merge: true });
+        setLessonMsg("레슨 저장 완료", "success");
+        resetLessonForm();
+        await loadLessons(courseId);
+      } catch (e) {
+        console.error(e);
+        setLessonMsg(`저장 실패: ${e?.message || "알 수 없는 오류"}`, "error");
+      } finally {
+        btnLessonSave.disabled = false;
+      }
+    });
 
     wirePricingCalculator();
     await applyCategoryPricingDefaultsIfNeeded();

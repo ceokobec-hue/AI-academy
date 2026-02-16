@@ -156,6 +156,47 @@
                 </div>
               </fieldset>
 
+              <fieldset class="fieldset" id="categoryAdminFieldset">
+                <legend class="legend">카테고리 관리</legend>
+                <p class="hint" style="margin-top: 0;">
+                  카테고리는 Firestore의 <code>categories</code> 컬렉션에 저장됩니다. (관리자만 저장 가능)
+                  <br />
+                  새 카테고리를 추가하면 <b>강의수강(course.html)</b>과 <b>관리자(admin.html)</b>의 카테고리 목록에 바로 반영됩니다.
+                </p>
+
+                <div class="card" style="padding: 14px; margin: 12px 0 0;">
+                  <div class="grid2" style="align-items: end;">
+                    <div class="field">
+                      <label class="label" for="catManageId">카테고리 ID(doc id)</label>
+                      <input class="input" id="catManageId" placeholder="예: ai-business-basic" />
+                      <p class="hint">강의 문서의 <code>categoryId</code>로도 사용됩니다.</p>
+                    </div>
+                    <div class="field">
+                      <label class="label" for="catManageOrder">정렬 순서(order)</label>
+                      <input class="input" id="catManageOrder" type="number" min="1" step="1" placeholder="예: 3" />
+                      <p class="hint hint-spacer" aria-hidden="true">정렬용</p>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label class="label" for="catManageName">표시 이름</label>
+                    <input class="input" id="catManageName" placeholder="예: 비즈니스기초반" />
+                  </div>
+
+                  <div class="actions" style="margin-top: 10px; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-ghost btn-sm" type="button" id="btnCatLoadFromSelect">현재 선택 카테고리 불러오기</button>
+                    <button class="btn btn-primary btn-sm" type="button" id="btnCatSave">카테고리 저장(추가/수정)</button>
+                  </div>
+                  <p class="hint" id="catManageMsg" style="margin: 10px 0 0;"></p>
+                </div>
+
+                <div style="margin-top: 12px;">
+                  <div class="muted" style="font-weight: 900; margin-bottom: 8px;">카테고리 순서(↑/↓로 변경)</div>
+                  <div id="catOrderList" class="lesson-admin-list"></div>
+                  <p class="hint" id="catOrderMsg" style="margin: 10px 0 0;"></p>
+                </div>
+              </fieldset>
+
               <fieldset class="fieldset">
                 <legend class="legend">상세 내용</legend>
 
@@ -206,6 +247,59 @@
                   <label class="label" for="attachFiles">첨부파일(PDF/ZIP 등, 여러 개 가능)</label>
                   <input class="input" id="attachFiles" name="attachFiles" type="file" multiple />
                   <div id="attachProgressList" class="attach-list"></div>
+                </div>
+              </fieldset>
+
+              <fieldset class="fieldset" id="lessonAdminFieldset">
+                <legend class="legend">레슨(목차) 관리</legend>
+                <p class="hint" style="margin-top: 0;">
+                  이 강의(course) 안에 1강/2강/3강… 레슨을 추가합니다. 영상 길이(분)는 URL을 넣으면 자동으로 계산됩니다.
+                  <br />
+                  ※ 새 강의를 “courseId 자동 생성”으로 만든 경우, 먼저 위에서 <b>저장</b>한 뒤 “이 강의 수정” 링크로 들어와 주세요.
+                </p>
+
+                <div class="card" style="padding: 14px; margin: 12px 0 0;">
+                  <div class="grid2" style="align-items: end;">
+                    <div class="field">
+                      <label class="label" for="lessonOrder">순서(order)</label>
+                      <input class="input" id="lessonOrder" type="number" min="1" step="1" placeholder="예: 1" />
+                    </div>
+                    <div class="field">
+                      <label class="label" for="lessonDurationSec">길이(자동, 초)</label>
+                      <input class="input" id="lessonDurationSec" type="number" readonly placeholder="자동 계산" />
+                      <p class="hint" id="lessonDurationHint" style="margin: 8px 0 0;"></p>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label class="label" for="lessonTitle">소제목(레슨 제목)</label>
+                    <input class="input" id="lessonTitle" placeholder="예: 1강 - 재무제표 기초" />
+                  </div>
+
+                  <div class="field">
+                    <label class="label" for="lessonVideoUrl">영상 URL(Firebase Storage 다운로드 URL)</label>
+                    <input class="input" id="lessonVideoUrl" placeholder="https://firebasestorage.googleapis.com/..." />
+                    <p class="hint" style="margin: 8px 0 0;">
+                      또는 아래에서 파일을 선택해 업로드하면 URL이 자동으로 채워집니다.
+                    </p>
+                  </div>
+
+                  <div class="field">
+                    <label class="label" for="lessonVideoFile">레슨 영상 파일(mp4 등)</label>
+                    <input class="input" id="lessonVideoFile" type="file" accept="video/*" />
+                    <progress class="upload-progress" id="lessonVideoProgress" max="100" value="0"></progress>
+                    <div class="actions" style="margin-top: 10px; gap: 10px; flex-wrap: wrap;">
+                      <button class="btn btn-ghost btn-sm" type="button" id="btnLessonAutoDuration">영상 길이 자동 뽑기</button>
+                      <button class="btn btn-primary btn-sm" type="button" id="btnLessonSave">레슨 저장(추가/수정)</button>
+                      <button class="btn btn-ghost btn-sm" type="button" id="btnLessonReset">초기화</button>
+                    </div>
+                    <p class="hint" id="lessonAdminMsg" style="margin: 10px 0 0;"></p>
+                  </div>
+                </div>
+
+                <div style="margin-top: 12px;">
+                  <div class="muted" style="font-weight: 900; margin-bottom: 8px;">레슨 목록</div>
+                  <div id="lessonAdminList" class="lesson-admin-list"></div>
                 </div>
               </fieldset>
 
