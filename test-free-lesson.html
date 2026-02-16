@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>무료 레슨 테스트</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+    pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }
+    .result { margin: 20px 0; padding: 15px; border: 2px solid #ddd; border-radius: 5px; }
+    .success { border-color: #4caf50; background: #e8f5e9; }
+    .error { border-color: #f44336; background: #ffebee; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 10px 5px; }
+  </style>
+</head>
+<body>
+  <h1>🔍 무료 레슨 데이터 확인</h1>
+  <p>이 페이지는 Firestore에서 실제 레슨 데이터를 읽어와 <code>isFree</code> 값을 확인합니다.</p>
+  
+  <div>
+    <button onclick="checkLesson()">레슨 데이터 확인</button>
+    <button onclick="location.reload()">새로고침</button>
+  </div>
+  
+  <div id="result"></div>
+  
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+    
+    const firebaseConfig = {
+      apiKey: "AIzaSyCbVPbM6mi0oNy_aPGhcZr-wSa5ByPpVFM",
+      authDomain: "aiacademy-36b79.firebaseapp.com",
+      projectId: "aiacademy-36b79",
+      storageBucket: "aiacademy-36b79.firebasestorage.app",
+      messagingSenderId: "1061803881843",
+      appId: "1:1061803881843:web:7d1c7ffba2c68ad9835ef7"
+    };
+    
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    
+    let currentUser = null;
+    onAuthStateChanged(auth, (user) => {
+      currentUser = user;
+      document.getElementById('result').innerHTML = user 
+        ? `<div class="result">✅ 로그인됨: ${user.email || user.uid}</div>`
+        : `<div class="result">⚠️ 로그인 안 됨</div>`;
+    });
+    
+    window.checkLesson = async function() {
+      const resultEl = document.getElementById('result');
+      resultEl.innerHTML = '<div class="result">⏳ 데이터 읽는 중...</div>';
+      
+      try {
+        const courseId = 'MaxPhfaxduGUIdPzFte4';
+        const lessonId = 'fCyDtbvnMvQoLzhqncvp';
+        
+        const lessonRef = doc(db, 'courses', courseId, 'lessons', lessonId);
+        const lessonSnap = await getDoc(lessonRef);
+        
+        if (!lessonSnap.exists()) {
+          resultEl.innerHTML = '<div class="result error">❌ 레슨을 찾을 수 없습니다.</div>';
+          return;
+        }
+        
+        const data = lessonSnap.data();
+        const isFree = data.isFree;
+        const isFreeType = typeof isFree;
+        const isFreeValue = isFree === true;
+        
+        const html = `
+          <div class="result ${isFreeValue ? 'success' : 'error'}">
+            <h3>${isFreeValue ? '✅ 무료 레슨 설정됨' : '❌ 무료 레슨 아님'}</h3>
+            <p><strong>레슨 제목:</strong> ${data.title || '(없음)'}</p>
+            <p><strong>isFree 값:</strong> <code>${JSON.stringify(isFree)}</code></p>
+            <p><strong>isFree 타입:</strong> <code>${isFreeType}</code></p>
+            <p><strong>isFree === true:</strong> <code>${isFreeValue}</code></p>
+            <p><strong>영상 URL:</strong> ${data.video?.src ? '있음' : '없음'}</p>
+            <hr>
+            <details>
+              <summary>전체 데이터 보기</summary>
+              <pre>${JSON.stringify(data, null, 2)}</pre>
+            </details>
+          </div>
+        `;
+        resultEl.innerHTML = html;
+        
+      } catch (e) {
+        resultEl.innerHTML = `<div class="result error">❌ 에러: ${e.message}</div>`;
+        console.error(e);
+      }
+    };
+  </script>
+</body>
+</html>

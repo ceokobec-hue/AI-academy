@@ -60,6 +60,111 @@ function ensureAuthUIContainer({ signupLink, loginLink }) {
   return container;
 }
 
+function isMobileNav() {
+  try {
+    return (
+      window.matchMedia?.("(max-width: 840px)")?.matches ||
+      window.matchMedia?.("(hover: none) and (pointer: coarse)")?.matches
+    );
+  } catch {
+    return false;
+  }
+}
+
+function resetMobileNavScroll() {
+  if (!isMobileNav()) return;
+  const nav = document.querySelector("nav.nav");
+  if (!nav) return;
+  // iOS/Safari can restore horizontal scroll position; force start at the first item.
+  const go = () => {
+    nav.scrollLeft = 0;
+    try {
+      nav.scrollTo?.({ left: 0, behavior: "auto" });
+    } catch {
+      // ignore
+    }
+  };
+
+  go();
+  requestAnimationFrame(go);
+  window.setTimeout(go, 0);
+  window.setTimeout(go, 60);
+  window.setTimeout(go, 200);
+}
+
+function wireMobileNavDrawer() {
+  const nav = document.querySelector("nav.nav");
+  const headerInner = document.querySelector(".header-inner");
+  if (!nav || !headerInner) return;
+
+  // Ensure stable id for aria-controls
+  if (!nav.id) nav.id = "siteNav";
+
+  // Backdrop (mobile only via CSS)
+  let backdrop = document.querySelector(".nav-backdrop");
+  if (!backdrop) {
+    backdrop = document.createElement("div");
+    backdrop.className = "nav-backdrop";
+    backdrop.setAttribute("aria-hidden", "true");
+    document.body.appendChild(backdrop);
+  }
+
+  // Toggle button (mobile only via CSS)
+  let toggle = document.querySelector("[data-nav-toggle]");
+  if (!toggle) {
+    toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "nav-toggle";
+    toggle.dataset.navToggle = "true";
+    toggle.setAttribute("aria-label", "메뉴 열기");
+    toggle.setAttribute("aria-controls", nav.id);
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.innerHTML = `
+      <span class="nav-toggle-lines" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </span>
+    `;
+    headerInner.appendChild(toggle);
+  }
+
+  const root = document.documentElement;
+  const isOpen = () => root.classList.contains("nav-open");
+  const open = () => {
+    root.classList.add("nav-open");
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.setAttribute("aria-label", "메뉴 닫기");
+  };
+  const close = () => {
+    root.classList.remove("nav-open");
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-label", "메뉴 열기");
+  };
+  const toggleOpen = () => (isOpen() ? close() : open());
+
+  toggle.addEventListener("click", toggleOpen);
+  backdrop.addEventListener("click", close);
+  nav.addEventListener("click", (e) => {
+    const a = e.target?.closest?.("a");
+    if (!a) return;
+    // Chrome can cancel navigation if we transform/close synchronously.
+    // Defer closing to next tick so the default navigation can proceed first.
+    window.setTimeout(close, 0);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+
+  // If leaving mobile viewport, ensure drawer is closed
+  try {
+    const mq = window.matchMedia("(max-width: 840px)");
+    mq.addEventListener?.("change", (ev) => {
+      if (!ev.matches) close();
+    });
+  } catch {
+    // ignore
+  }
+}
+
 function isAdmin(user) {
   return typeof user?.email === "string" && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
 }
@@ -79,16 +184,19 @@ function upsertAdminLink(user) {
 
     const loginLink = nav.querySelector('[data-auth-link="login"]');
     nav.insertBefore(a, loginLink || null);
+    resetMobileNavScroll();
     return;
   }
 
   existing?.remove();
+  resetMobileNavScroll();
 }
 
 function renderLoggedOut({ loginLink, signupLink, authUI }) {
   if (loginLink) loginLink.style.display = "";
   if (signupLink) signupLink.style.display = "";
   if (authUI) authUI.textContent = "";
+  resetMobileNavScroll();
 }
 
 function renderLoggedIn({ loginLink, signupLink, authUI, displayName, onLogout }) {
@@ -114,6 +222,7 @@ function renderLoggedIn({ loginLink, signupLink, authUI, displayName, onLogout }
   btn.addEventListener("click", onLogout);
 
   authUI.append(inviteLink, nameEl, btn);
+  resetMobileNavScroll();
 }
 
 async function getDisplayName({ user, db }) {
@@ -137,6 +246,13 @@ async function getDisplayName({ user, db }) {
 }
 
 function wireHeaderAuth() {
+  wireMobileNavDrawer();
+
+  // Ensure mobile nav starts from the first menu on initial load / bfcache restore.
+  resetMobileNavScroll();
+  window.addEventListener("pageshow", resetMobileNavScroll);
+  window.addEventListener("load", resetMobileNavScroll);
+
   const fb = ensureFirebase();
   if (!fb) return;
 

@@ -647,6 +647,11 @@ a {
   transform: none;
 }
 
+.lesson-chip.is-free {
+  border-color: rgba(90, 255, 160, 0.35);
+  background: rgba(90, 255, 160, 0.08);
+}
+
 .lesson-chip.is-locked:hover {
   background: rgba(255, 255, 255, 0.06);
   transform: none;
@@ -687,9 +692,30 @@ a {
   cursor: not-allowed;
 }
 
+.lesson-outline-item.is-free {
+  border-color: rgba(90, 255, 160, 0.35);
+  background: rgba(90, 255, 160, 0.06);
+}
+
 .lesson-outline-item.is-locked:hover {
   background: rgba(0, 0, 0, 0.12);
   transform: none;
+}
+
+.lesson-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(90, 255, 160, 0.35);
+  background: rgba(90, 255, 160, 0.1);
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 900;
+  font-size: 0.82rem;
+  margin-left: 8px;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 .lesson-outline-title {
@@ -2503,15 +2529,136 @@ a {
 }
 
 @media (max-width: 840px) {
+  /* Fix: ensure drawer sits above backdrop (mobile only) */
+  .site-header {
+    z-index: 300;
+  }
+
   .header-inner {
     height: auto;
     padding: 14px 0;
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-wrap: nowrap;
+    justify-content: space-between;
   }
 
   .brand {
     min-width: unset;
+  }
+
+  /* Mobile-only: header nav drawer (desktop untouched) */
+  .nav {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    width: min(360px, 88vw);
+    padding: 18px 16px 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: rgba(5, 10, 29, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    transform: translateX(110%);
+    transition: transform 200ms ease;
+    z-index: 310;
+  }
+
+  html.nav-open .nav {
+    transform: translateX(0);
+  }
+
+  .nav-link {
+    font-size: 1.02rem; /* down from 1.2rem for mobile */
+    padding: 12px 10px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .nav-auth {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin: 10px 0 0;
+  }
+
+  .nav-user {
+    font-size: 1.02rem;
+    white-space: nowrap;
+    padding: 2px 4px;
+    opacity: 0.9;
+  }
+
+  .nav-logout {
+    font-size: 1.02rem;
+    padding: 8px 12px;
+  }
+
+  .nav-toggle {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.92);
+    border-radius: 14px;
+    height: 44px;
+    width: 44px;
+    display: inline-grid;
+    place-items: center;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+
+  .nav-toggle-lines {
+    width: 18px;
+    height: 14px;
+    display: grid;
+    gap: 4px;
+  }
+
+  .nav-toggle-lines span {
+    height: 2px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9);
+    display: block;
+  }
+
+  .nav-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+    z-index: 290;
+  }
+
+  html.nav-open .nav-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  html.nav-open body {
+    overflow: hidden;
+  }
+
+  .brand-avatar {
+    width: 52px;
+    height: 52px;
+  }
+
+  .brand-title {
+    font-size: 1.12rem;
+  }
+
+  .brand-sub {
+    font-size: 1.02rem;
   }
 
   .hero {

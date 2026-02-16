@@ -476,7 +476,10 @@ function renderVideo({ course, user, enrolled, db, rootCourseId }) {
   }
   cleanupWatchLogging = null;
 
-  if (!user || !enrolled) {
+  const isFree = course?.isFree === true;
+  const canWatch = !!enrolled || isFree;
+
+  if (!canWatch) {
     el.innerHTML = `
       <div class="locked">
         <p class="locked-title">수강 신청 후 시청 가능</p>
@@ -712,6 +715,7 @@ function normalizeLesson(l, idFallback, orderFallback) {
     order: Number.isFinite(Number(l.order)) ? Number(l.order) : Number(orderFallback || 0),
     title: String(l.title || ""),
     durationSec: Number(l.durationSec || 0),
+    isFree: l.isFree === true,
     video: l.video || { src: "", poster: "" },
     content: l.content || { overview: "", bullets: [] },
     resources: Array.isArray(l.resources) ? l.resources : [],
@@ -759,29 +763,36 @@ function animateSwap(dir) {
   });
 }
 
-function renderLessonNavMobileChips({ lessons, selectedId, onSelect, locked }) {
+function renderLessonNavMobileChips({ lessons, selectedId, onSelect, getFlags }) {
   const wrap = $("lessonNavMobile");
   if (!wrap) return;
   wrap.innerHTML = lessons
     .map((l, idx) => {
       const active = l.id === selectedId ? "is-active" : "";
+      const flags = typeof getFlags === "function" ? (getFlags(l) || {}) : {};
+      const locked = !!flags.locked;
+      const freeUnlocked = !!flags.freeUnlocked;
       const lockClass = locked ? " is-locked" : "";
+      const freeClass = freeUnlocked ? " is-free" : "";
       const n = Number.isFinite(Number(l.order)) && Number(l.order) > 0 ? Number(l.order) : idx + 1;
       const label = `${n}강`;
-      return `<button class="lesson-chip ${active}${lockClass}" type="button" data-lesson-id="${esc(l.id)}" ${
-        locked ? 'disabled aria-disabled="true"' : ""
-      }>${esc(label)}</button>`;
+      const free =
+        l.isFree && freeUnlocked
+          ? ` <span class="lesson-badge lesson-badge--free">🔓 무료</span>`
+          : l.isFree
+            ? ` <span class="lesson-badge lesson-badge--free">무료</span>`
+            : "";
+      const lock = locked ? ` <span class="muted" style="font-weight:900;">🔒</span>` : "";
+      return `<button class="lesson-chip ${active}${lockClass}${freeClass}" type="button" data-lesson-id="${esc(l.id)}">${esc(label)}${free}${lock}</button>`;
     })
     .join("");
 
-  if (!locked) {
-    wrap.querySelectorAll("[data-lesson-id]").forEach((btn) => {
-      btn.addEventListener("click", () => onSelect(btn.getAttribute("data-lesson-id") || "", "next"));
-    });
-  }
+  wrap.querySelectorAll("[data-lesson-id]").forEach((btn) => {
+    btn.addEventListener("click", () => onSelect(btn.getAttribute("data-lesson-id") || "", "next"));
+  });
 }
 
-function renderLessonOutlineDesktop({ lessons, selectedId, onSelect, locked }) {
+function renderLessonOutlineDesktop({ lessons, selectedId, onSelect, getFlags }) {
   const wrap = $("lessonOutline");
   const card = $("lessonOutlineCard");
   if (!wrap || !card) return;
@@ -794,15 +805,23 @@ function renderLessonOutlineDesktop({ lessons, selectedId, onSelect, locked }) {
   wrap.innerHTML = lessons
     .map((l, idx) => {
       const active = l.id === selectedId ? "is-active" : "";
+      const flags = typeof getFlags === "function" ? (getFlags(l) || {}) : {};
+      const locked = !!flags.locked;
+      const freeUnlocked = !!flags.freeUnlocked;
       const lockClass = locked ? "is-locked" : "";
+      const freeClass = freeUnlocked ? "is-free" : "";
       const title = String(l.title || "").trim() || `${idx + 1}강`;
       const dur = formatDurationLabel(l.durationSec);
       const n = Number.isFinite(Number(l.order)) && Number(l.order) > 0 ? Number(l.order) : idx + 1;
+      const free =
+        l.isFree && freeUnlocked
+          ? ` <span class="lesson-badge lesson-badge--free">🔓 무료</span>`
+          : l.isFree
+            ? ` <span class="lesson-badge lesson-badge--free">무료</span>`
+            : "";
       return `
-        <div class="lesson-outline-item ${active} ${lockClass}" role="button" tabindex="0" data-lesson-id="${esc(l.id)}" ${
-          locked ? 'aria-disabled="true"' : ""
-        }>
-          <div class="lesson-outline-title">${esc(`${n}강: ${title}`)}${locked ? ` <span class="muted">🔒</span>` : ""}</div>
+        <div class="lesson-outline-item ${active} ${lockClass} ${freeClass}" role="button" tabindex="0" data-lesson-id="${esc(l.id)}">
+          <div class="lesson-outline-title">${esc(`${n}강: ${title}`)}${free}${locked ? ` <span class="muted">🔒</span>` : ""}</div>
           <div class="lesson-outline-sub">${dur ? esc(`(${dur})`) : ""}</div>
         </div>
       `;
@@ -818,9 +837,7 @@ function renderLessonOutlineDesktop({ lessons, selectedId, onSelect, locked }) {
       }
     });
   };
-  if (!locked) {
-    wrap.querySelectorAll("[data-lesson-id]").forEach(bind);
-  }
+  wrap.querySelectorAll("[data-lesson-id]").forEach(bind);
 }
 
 function updateLessonNow({ lessons, selectedIndex }) {
@@ -904,25 +921,43 @@ async function boot() {
   const renderAll = () => {
     const idx = Math.max(0, getSelectedIndex());
     const lesson = getSelectedLesson();
+    const canAccessLesson = (l) => {
+      if (!l) return false;
+      if (currentEnrolled) return true;
+      if (l.isFree === true) return true;
+      return false;
+    };
     updateLessonNow({ lessons, selectedIndex: idx });
     renderLessonNavMobileChips({
       lessons,
       selectedId,
       onSelect: (id2, dir) => selectLesson(id2, dir),
-      locked: !currentEnrolled,
+      getFlags: (l) => ({
+        locked: !canAccessLesson(l),
+        freeUnlocked: l?.isFree === true && !currentEnrolled,
+      }),
     });
     renderLessonOutlineDesktop({
       lessons,
       selectedId,
       onSelect: (id2, dir) => selectLesson(id2, dir),
-      locked: !currentEnrolled,
+      getFlags: (l) => ({
+        locked: !canAccessLesson(l),
+        freeUnlocked: l?.isFree === true && !currentEnrolled,
+      }),
     });
 
     if (lesson) {
       renderContent(lesson);
       renderResources(lesson, { user: currentUser, enrolled: currentEnrolled });
       renderFiles(lesson, { user: currentUser, enrolled: currentEnrolled });
-      renderVideo({ course: lesson, user: currentUser, enrolled: currentEnrolled, db: fb?.db || null, rootCourseId: course.id });
+      renderVideo({
+        course: lesson,
+        user: currentUser,
+        enrolled: canAccessLesson(lesson),
+        db: fb?.db || null,
+        rootCourseId: course.id,
+      });
     }
   };
 

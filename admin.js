@@ -324,6 +324,7 @@ async function boot() {
   const lessonListEl = $("lessonAdminList");
   const lessonOrderEl = $("lessonOrder");
   const lessonTitleEl = $("lessonTitle");
+  const lessonIsFreeEl = $("lessonIsFree");
   const lessonVideoUrlEl = $("lessonVideoUrl");
   const lessonVideoFileEl = $("lessonVideoFile");
   const lessonVideoProgressEl = $("lessonVideoProgress");
@@ -362,6 +363,7 @@ async function boot() {
     lessonEditId = "";
     if (lessonOrderEl) lessonOrderEl.value = "";
     if (lessonTitleEl) lessonTitleEl.value = "";
+    if (lessonIsFreeEl) lessonIsFreeEl.checked = false;
     if (lessonVideoUrlEl) lessonVideoUrlEl.value = "";
     if (lessonVideoFileEl) lessonVideoFileEl.value = "";
     if (lessonVideoProgressEl) lessonVideoProgressEl.value = 0;
@@ -395,10 +397,11 @@ async function boot() {
               const dur = Number(l.durationSec || 0);
               const durLabel = formatDurationLabel(dur);
               const safeUrl = url ? `<a class="link" href="${url}" target="_blank" rel="noopener noreferrer">열기</a>` : `<span class="muted">-</span>`;
+              const freeBadge = l.isFree ? ` <span class="badge badge-success">무료</span>` : "";
               return `
                 <div class="lesson-admin-row">
                   <div class="lesson-admin-main">
-                    <div style="font-weight:900;">${order}강: ${title} ${durLabel ? `<span class="muted">(${durLabel})</span>` : ""}</div>
+                    <div style="font-weight:900;">${order}강: ${title}${freeBadge} ${durLabel ? `<span class="muted">(${durLabel})</span>` : ""}</div>
                     <div class="muted" style="word-break:break-all;">${safeUrl} <span class="muted">· id: ${l.id}</span></div>
                   </div>
                   <div class="lesson-admin-actions">
@@ -420,6 +423,7 @@ async function boot() {
           lessonEditId = id;
           if (lessonOrderEl) lessonOrderEl.value = String(Number(item.order || 1));
           if (lessonTitleEl) lessonTitleEl.value = String(item.title || "");
+          if (lessonIsFreeEl) lessonIsFreeEl.checked = item.isFree === true;
           if (lessonVideoUrlEl) lessonVideoUrlEl.value = String(item.video?.src || item.videoSrc || "");
           const dur = Number(item.durationSec || 0);
           if (lessonDurationSecEl) lessonDurationSecEl.value = dur > 0 ? String(dur) : "";
@@ -851,6 +855,7 @@ async function boot() {
       }
       const order = Number(lessonOrderEl?.value || 0);
       const title = String(lessonTitleEl?.value || "").trim();
+      const isFree = lessonIsFreeEl?.checked === true;
       let videoUrl = String(lessonVideoUrlEl?.value || "").trim();
       const videoFile = lessonVideoFileEl?.files?.[0] || null;
       let durationSec = Number(lessonDurationSecEl?.value || 0);
@@ -904,6 +909,7 @@ async function boot() {
           title,
           video: { src: videoUrl },
           durationSec: Math.round(durationSec),
+          isFree: !!isFree,
           updatedAt: now,
         };
         if (!lessonEditId) payload.createdAt = now;
