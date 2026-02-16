@@ -171,13 +171,13 @@ a {
 }
 
 .brand-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  padding: 2px;
-  background: linear-gradient(135deg, rgba(255, 79, 216, 0.9), rgba(138, 92, 255, 0.95));
-  box-shadow: 0 10px 30px rgba(138, 92, 255, 0.25);
   display: grid;
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
   place-items: center;
 }
 
@@ -185,9 +185,10 @@ a {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.35), transparent 50%),
-    rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: url("./assets/brand-mark.png") center / cover no-repeat;
+  border: none;
+  display: grid;
+  place-items: center;
 }
 
 .brand-text {
@@ -1561,6 +1562,50 @@ a {
   color: rgba(255, 255, 255, 0.74);
   font-weight: 800;
   font-size: 0.98rem;
+}
+
+.schedule-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 6px 0 14px;
+}
+
+.schedule-filter {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  padding: 9px 12px;
+  font-weight: 900;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.schedule-filter:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.schedule-filter.is-active {
+  border-color: rgba(138, 92, 255, 0.45);
+  background: rgba(138, 92, 255, 0.12);
+}
+
+.schedule-filter .dot {
+  width: 9px;
+  height: 9px;
+}
+
+.schedule-filter-hint {
+  flex: 1 1 220px;
+  font-size: 0.95rem;
 }
 
 .legend-item {

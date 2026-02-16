@@ -96,8 +96,8 @@
       <section class="home-section" aria-label="이번 달 강의 일정">
         <div class="container">
           <div class="page-head">
-            <h2 class="page-title">이번 달 라이브 수업 일정</h2>
-            <p class="page-sub">학원처럼 “달력”으로 한눈에 보자. 반복 수업도 자동 표시돼.</p>
+            <h2 class="page-title">김지백 AI경영아카데미 수업 일정</h2>
+            <p class="page-sub">현장 강의와 Youtube 스트리밍 일정 안내를 공유합니다</p>
           </div>
 
           <div class="schedule-card card">
@@ -109,10 +109,23 @@
               </div>
               <div class="schedule-legend">
                 <span class="legend-item"><span class="dot dot-live"></span> 라이브</span>
-                <span class="legend-item"><span class="dot dot-special"></span> 특강</span>
-                <span class="legend-item"><span class="dot dot-deadline"></span> 마감</span>
+                <span class="legend-item"><span class="dot dot-special"></span> 현장</span>
+                <span class="legend-item"><span class="dot dot-deadline"></span> 스터디</span>
               </div>
               <div class="schedule-admin" id="scheduleAdminActions"></div>
+            </div>
+
+            <div class="schedule-filters" id="scheduleFilters" role="group" aria-label="다가오는 수업 필터">
+              <button class="schedule-filter" type="button" data-upcoming-type="live">
+                <span class="dot dot-live" aria-hidden="true"></span> 라이브
+              </button>
+              <button class="schedule-filter" type="button" data-upcoming-type="special">
+                <span class="dot dot-special" aria-hidden="true"></span> 현장
+              </button>
+              <button class="schedule-filter" type="button" data-upcoming-type="deadline">
+                <span class="dot dot-deadline" aria-hidden="true"></span> 스터디
+              </button>
+              <div class="schedule-filter-hint muted">버튼을 누르면 “다가오는 수업”으로 이동합니다.</div>
             </div>
 
             <div class="calendar">
@@ -122,7 +135,7 @@
               <div class="calendar-grid" id="calGrid" aria-live="polite"></div>
             </div>
 
-            <div class="upcoming">
+            <div class="upcoming" id="upcomingSection">
               <div class="upcoming-head">
                 <h3 class="panel-title" style="margin:0;">다가오는 수업</h3>
                 <a class="btn btn-ghost btn-sm" href="./course.html">강의 보러가기</a>
@@ -136,8 +149,8 @@
       <section class="home-section" aria-label="학원 게시판">
         <div class="container">
           <div class="page-head">
-            <h2 class="page-title">학원 게시판</h2>
-            <p class="page-sub">공지 / 모집 / 후기 한 번에 보기</p>
+            <h2 class="page-title">아카데미 게시판</h2>
+            <p class="page-sub">공지 / 모집 / 후기 한 번에 확인하세요!</p>
           </div>
 
           <div class="board-grid">

@@ -208,6 +208,95 @@ function buildCalendarDays(monthDate) {
   return days;
 }
 
+// upcoming filters (라이브/현장/스터디)
+let upcomingFilterType = ""; // "" means no filter (전체)
+let lastUpcomingAll = []; // cached future events in current month
+
+function setScheduleFilterActiveUI() {
+  const wrap = $("scheduleFilters");
+  if (!wrap) return;
+  const btns = [...wrap.querySelectorAll("button[data-upcoming-type]")];
+  for (const b of btns) {
+    const t = String(b.getAttribute("data-upcoming-type") || "");
+    b.classList.toggle("is-active", !!upcomingFilterType && t === upcomingFilterType);
+    b.setAttribute("aria-pressed", String(!!upcomingFilterType && t === upcomingFilterType));
+  }
+}
+
+function renderUpcomingHTML(list) {
+  return list.length
+    ? list
+        .map((e) => {
+          const badge = badgeTextForStart(e.startAt);
+          const time = `${pad2(e.startAt.getHours())}:${pad2(e.startAt.getMinutes())}`;
+          const meta = `${e.startAt.getMonth() + 1}/${e.startAt.getDate()} ${time}`;
+          const sub = [e.teacher, e.place].filter(Boolean).join(" · ");
+          return `
+            <div class="up-item">
+              <div class="up-left">
+                <div class="up-title">
+                  <span class="badge badge-primary">${esc(badge)}</span>
+                  <span class="up-dot ${typeDotClass(e.type)}"></span>
+                  ${esc(e.title)}
+                </div>
+                <div class="up-sub">${esc(meta)}${sub ? ` · ${esc(sub)}` : ""}</div>
+              </div>
+            </div>
+          `;
+        })
+        .join("")
+    : "";
+}
+
+function renderUpcomingFromCache() {
+  const listEl = $("upcomingList");
+  if (!listEl) return;
+
+  const filtered = upcomingFilterType
+    ? lastUpcomingAll.filter((e) => String(e.type) === String(upcomingFilterType))
+    : lastUpcomingAll;
+
+  const shown = filtered.slice(0, 7);
+
+  if (!lastUpcomingAll.length) {
+    listEl.innerHTML = `<div class="empty-card card">이번 달 일정 준비 중이야. 곧 올릴게!</div>`;
+    return;
+  }
+  if (upcomingFilterType && !filtered.length) {
+    listEl.innerHTML = `<div class="empty-card card">선택한 타입의 “다가오는 수업”이 아직 없어요.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = renderUpcomingHTML(shown);
+}
+
+function scrollToUpcoming() {
+  const el = $("upcomingSection") || document.querySelector(".upcoming");
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function wireScheduleFilters() {
+  const wrap = $("scheduleFilters");
+  if (!wrap || wrap.dataset.wired === "1") return;
+  wrap.dataset.wired = "1";
+
+  setScheduleFilterActiveUI();
+
+  wrap.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("button[data-upcoming-type]");
+    if (!btn) return;
+    const t = String(btn.getAttribute("data-upcoming-type") || "");
+    if (!t) return;
+
+    // toggle (same button -> 전체 보기)
+    upcomingFilterType = upcomingFilterType === t ? "" : t;
+    setScheduleFilterActiveUI();
+    renderUpcomingFromCache();
+    scrollToUpcoming();
+  });
+}
+
 function renderCalendar({ monthDate, occurrences, oneOffEvents }) {
   const all = [...occurrences, ...oneOffEvents].filter((e) => e.startAt);
   all.sort((a, b) => a.startAt - b.startAt);
@@ -256,31 +345,10 @@ function renderCalendar({ monthDate, occurrences, oneOffEvents }) {
     })
     .join("");
 
-  // upcoming list (next 7)
-  const upcoming = all.filter((e) => e.startAt >= new Date()).slice(0, 7);
-  const listEl = $("upcomingList");
-  listEl.innerHTML = upcoming.length
-    ? upcoming
-        .map((e) => {
-          const badge = badgeTextForStart(e.startAt);
-          const time = `${pad2(e.startAt.getHours())}:${pad2(e.startAt.getMinutes())}`;
-          const meta = `${e.startAt.getMonth() + 1}/${e.startAt.getDate()} ${time}`;
-          const sub = [e.teacher, e.place].filter(Boolean).join(" · ");
-          return `
-            <div class="up-item">
-              <div class="up-left">
-                <div class="up-title">
-                  <span class="badge badge-primary">${esc(badge)}</span>
-                  <span class="up-dot ${typeDotClass(e.type)}"></span>
-                  ${esc(e.title)}
-                </div>
-                <div class="up-sub">${esc(meta)}${sub ? ` · ${esc(sub)}` : ""}</div>
-              </div>
-            </div>
-          `;
-        })
-        .join("")
-    : `<div class="empty-card card">이번 달 일정 준비 중이야. 곧 올릴게!</div>`;
+  // upcoming list (next 7) + filter buttons
+  lastUpcomingAll = all.filter((e) => e.startAt >= new Date());
+  setScheduleFilterActiveUI();
+  renderUpcomingFromCache();
 }
 
 function ddayForDeadline(deadlineAt) {
@@ -372,6 +440,7 @@ async function boot() {
   monthDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
 
   let currentUser = null;
+  wireScheduleFilters();
 
   async function renderAll() {
     if (!fb) {
